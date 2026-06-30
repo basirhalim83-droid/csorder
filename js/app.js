@@ -380,6 +380,84 @@ function renderOrderCards(orders) {
 }
 
 // ── UPLOAD ORDER ──────────────────────────────────────────────────────────────
+
+// Regex parser — coba dulu sebelum hit API
+function parseOrderRegex(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+  const result = {
+    no: '', nama: '', hp: '', alamat: '',
+    kelurahan: '', kecamatan: '', kabupaten: '', provinsi: '', kodepos: '',
+    jumlah_pesanan: '', quantity: '', pembayaran: '', total_pembayaran: '',
+    instruksi_pengiriman: '', keterangan: '', rincian_pembayaran: '', keluhan: ''
+  };
+
+  // no: baris pertama
+  result.no = lines[0] || '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+
+    if (/^Nama\s*:/i.test(l)) {
+      result.nama = l.replace(/^Nama\s*:\s*/i, '').trim();
+
+    } else if (/^No\.?\s*HP\s*:/i.test(l)) {
+      result.hp = l.replace(/^No\.?\s*HP\s*:\s*/i, '').trim();
+
+    } else if (/^Alamat\s*:/i.test(l)) {
+      const val   = l.replace(/^Alamat\s*:\s*/i, '').trim();
+      const parts = val.split('|');
+      result.alamat = parts[0].trim();
+      if (parts[1]) result.instruksi_pengiriman = parts[1].trim();
+      if (parts.length > 2) result.rincian_pembayaran = parts.slice(2).join('|');
+
+    } else if (/^Jumlah\s*pesanan\s*:/i.test(l)) {
+      result.jumlah_pesanan = l.replace(/^Jumlah\s*pesanan\s*:\s*/i, '').trim();
+      const qm = result.jumlah_pesanan.match(/^(\d+)/);
+      if (qm) result.quantity = qm[1];
+
+    } else if (/^Pembayaran\s*:/i.test(l)) {
+      result.pembayaran = l.replace(/^Pembayaran\s*:\s*/i, '').trim();
+
+    } else if (/^Total\s*pembayaran\s*:/i.test(l)) {
+      let val = l.replace(/^Total\s*pembayaran\s*:\s*/i, '').trim();
+      // Kalau kosong, nilai ada di baris berikutnya (contoh: "99000+9000+5000=113000")
+      if (!val && lines[i + 1]) val = lines[i + 1];
+      const eqMatch = val.match(/=\s*(\d+)/);
+      result.total_pembayaran = eqMatch ? eqMatch[1] : val.replace(/\D/g, '');
+
+    } else if (/^KELUHAN\s*:/i.test(l)) {
+      result.keluhan = l.replace(/^KELUHAN\s*:\s*/i, '').trim();
+    }
+  }
+
+  // Wilayah: cari kodepos (5 digit), 4 baris sebelumnya = kelurahan/kec/kab/prov
+  const kpIdx = lines.findIndex(l => /^\d{5}$/.test(l));
+  if (kpIdx >= 4) {
+    result.kodepos   = lines[kpIdx];
+    result.provinsi  = lines[kpIdx - 1];
+    result.kabupaten = lines[kpIdx - 2];
+    result.kecamatan = lines[kpIdx - 3];
+    result.kelurahan = lines[kpIdx - 4];
+  }
+
+  // Keterangan: baris antara total_pembayaran dan KELUHAN, bukan baris angka/kalkulasi
+  const totalIdx   = lines.findIndex(l => /^Total\s*pembayaran\s*:/i.test(l));
+  const keluhanIdx = lines.findIndex(l => /^KELUHAN\s*:/i.test(l));
+  if (totalIdx >= 0 && keluhanIdx > totalIdx) {
+    const between = lines.slice(totalIdx + 1, keluhanIdx)
+      .filter(l => !/[+=]/.test(l) && !/^\d/.test(l) && l.length > 2);
+    result.keterangan = between.join('\n').trim();
+  }
+
+  return result;
+}
+
+// Cek apakah hasil regex cukup lengkap untuk dipakai
+function isRegexResultValid(d) {
+  return !!(d.nama && d.hp && d.alamat && d.kodepos && d.jumlah_pesanan);
+}
+
 async function doParse() {
   const text = document.getElementById('paste-input').value.trim();
   if (!text) { showToast('Paste teks orderan dulu ya.', 'warn'); return; }
@@ -391,16 +469,23 @@ async function doParse() {
   hideValBanner();
 
   try {
-    const res  = await fetch('/api/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    const json = await res.json();
+    // Coba regex dulu — instant, tanpa API call
+    const regexResult = parseOrderRegex(text);
 
-    if (!json.ok) throw new Error(json.error || 'Parse gagal');
+    if (isRegexResultValid(regexResult)) {
+      parsedData = regexResult;
+    } else {
+      // Fallback ke OpenAI API kalau regex kurang lengkap
+      const res  = await fetch('/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || 'Parse gagal');
+      parsedData = json.data;
+    }
 
-    parsedData = json.data;
     fillPreviewForm(parsedData);
     document.getElementById('preview-card').classList.add('show');
     document.getElementById('btn-submit').disabled = false;
@@ -410,7 +495,6 @@ async function doParse() {
     validateRincian();
     validateSKU();
 
-    // Scroll ke preview
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch(e) {
     showToast('Gagal parse: ' + e.message, 'error');
