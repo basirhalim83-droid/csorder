@@ -634,10 +634,29 @@ async function validateSKU() {
 
   // ── Cek keterangan ────────────────────────────────────────────────────────
   if (ketVal) {
-    const ketUp = ketVal.toUpperCase();
-    const match = keywords.some(w => ketUp.includes(w));
-    if (match) valSetField('keterangan', 'ok');
-    else valSetField('keterangan', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan di keterangan`);
+    const ketUp     = ketVal.toUpperCase();
+    const prodMatch = keywords.some(w => ketUp.includes(w));
+
+    if (!prodMatch) {
+      valSetField('keterangan', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan di keterangan`);
+    } else {
+      // Cari angka setelah keyword produk — format: "YOUZHI 1 CS LATHIFAH"
+      // Ambil angka yang muncul setelah salah satu keyword
+      let qtyKet = null;
+      for (const kw of keywords) {
+        const idx = ketUp.indexOf(kw);
+        if (idx === -1) continue;
+        const after = ketUp.slice(idx + kw.length).trim();
+        const m = after.match(/^[\s\w]*?(\d+)/);
+        if (m) { qtyKet = parseInt(m[1], 10); break; }
+      }
+
+      if (qtyKet !== null && qtyKet !== parsed.qty) {
+        valSetField('keterangan', 'warn', `⚠ Qty di keterangan (${qtyKet}) tidak cocok dengan SKU (${parsed.qty})`);
+      } else {
+        valSetField('keterangan', 'ok');
+      }
+    }
   }
 }
 
