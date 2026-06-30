@@ -4,6 +4,161 @@ let currentProfile = null;
 let parsedData    = null;   // hasil AI parsing
 let todayOrders   = [];     // orderan hari ini milik CS ini
 
+// ── DATE RANGE PICKER ─────────────────────────────────────────────────────────
+let drpSelStart = null, drpSelEnd = null;
+let drpViewYear = new Date().getFullYear(), drpViewMonth = new Date().getMonth();
+const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DAYS_ID   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+// State filter aktif (default: hari ini)
+let filterDateStart = todayStr();
+let filterDateEnd   = todayStr();
+
+function drpFmt(d) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function drpToggle() {
+  const dd = document.getElementById('drp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) { drpRender(); document.addEventListener('click', drpOutside); }
+  else document.removeEventListener('click', drpOutside);
+}
+
+function drpClose() {
+  document.getElementById('drp-dropdown').classList.remove('open');
+  document.removeEventListener('click', drpOutside);
+}
+
+function drpOutside(e) {
+  const dd = document.getElementById('drp-dropdown');
+  const tr = document.getElementById('drp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) drpClose();
+}
+
+function drpLocalStr(d) {
+  // Konversi Date object ke string YYYY-MM-DD pakai timezone WIB
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+}
+
+function drpPreset(days, label, btn) {
+  const end   = new Date();
+  const start = new Date(Date.now() - (days-1)*864e5);
+  drpSelStart = drpLocalStr(start);
+  drpSelEnd   = drpLocalStr(end);
+  document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drpUpdateSel(); drpRender();
+}
+
+function drpPresetThisMonth(btn) {
+  const now = new Date();
+  drpSelStart = drpLocalStr(new Date(now.getFullYear(), now.getMonth(), 1));
+  drpSelEnd   = drpLocalStr(now);
+  document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drpUpdateSel(); drpRender();
+}
+
+function drpPresetLastMonth(btn) {
+  const now = new Date();
+  drpSelStart = drpLocalStr(new Date(now.getFullYear(), now.getMonth()-1, 1));
+  drpSelEnd   = drpLocalStr(new Date(now.getFullYear(), now.getMonth(), 0));
+  document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drpUpdateSel(); drpRender();
+}
+
+function drpPresetYesterday(btn) {
+  const y = drpLocalStr(new Date(Date.now() - 864e5));
+  drpSelStart = y; drpSelEnd = y;
+  document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drpUpdateSel(); drpRender();
+}
+
+function drpUpdateSel() {
+  document.getElementById('drp-sel-start').textContent = drpFmt(drpSelStart);
+  document.getElementById('drp-sel-end').textContent   = drpFmt(drpSelEnd);
+}
+
+function drpApply() {
+  if (!drpSelStart) return;
+  filterDateStart = drpSelStart;
+  filterDateEnd   = drpSelEnd || drpSelStart;
+  const label = filterDateStart === filterDateEnd
+    ? drpFmt(filterDateStart)
+    : drpFmt(filterDateStart) + ' — ' + drpFmt(filterDateEnd);
+  document.getElementById('drp-label').textContent = label;
+  drpClose();
+  loadDashboard();
+}
+
+function drpClickDay(y, m, d) {
+  const clicked = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  if (!drpSelStart || (drpSelStart && drpSelEnd)) {
+    drpSelStart = clicked; drpSelEnd = null;
+  } else {
+    if (clicked < drpSelStart) { drpSelEnd = drpSelStart; drpSelStart = clicked; }
+    else drpSelEnd = clicked;
+  }
+  drpUpdateSel(); drpRender();
+}
+
+function drpRender() {
+  const y = drpViewYear, m = drpViewMonth;
+  const firstDay  = new Date(y, m, 1).getDay();
+  const startPad  = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const prevDays  = new Date(y, m, 0).getDate();
+  const todayS    = todayStr();
+
+  let html = `<div class="drp-cal-hdr">
+    <button class="drp-nav" onclick="drpNav(-1)">‹</button>
+    <div class="drp-cal-title">${MONTHS_ID[m]} ${y}</div>
+    <button class="drp-nav" onclick="drpNav(1)">›</button>
+  </div>
+  <div class="drp-days-hdr">${DAYS_ID.map(d=>`<span>${d}</span>`).join('')}</div>
+  <div class="drp-days">`;
+
+  for (let i=startPad;i>0;i--) {
+    html += `<button class="drp-day other-month">${prevDays-i+1}</button>`;
+  }
+  for (let d=1;d<=daysInMonth;d++) {
+    const cur = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday  = cur === todayS;
+    const isStart  = cur === drpSelStart;
+    const isEnd    = cur === drpSelEnd;
+    const inRange  = drpSelStart && drpSelEnd && cur > drpSelStart && cur < drpSelEnd;
+    let cls = 'drp-day';
+    if (isStart && isEnd)   cls += ' selected';
+    else if (isStart)       cls += ' range-start';
+    else if (isEnd)         cls += ' range-end';
+    else if (inRange)       cls += ' in-range';
+    if (isToday) cls += ' today';
+    html += `<button class="${cls}" onclick="drpClickDay(${y},${m},${d})">${d}</button>`;
+  }
+  const total = startPad + daysInMonth;
+  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d=1;d<=rem;d++) html += `<button class="drp-day other-month">${d}</button>`;
+  html += '</div>';
+  document.getElementById('drp-cal').innerHTML = html;
+}
+
+function drpNav(dir) {
+  drpViewMonth += dir;
+  if (drpViewMonth > 11) { drpViewMonth = 0; drpViewYear++; }
+  if (drpViewMonth < 0)  { drpViewMonth = 11; drpViewYear--; }
+  drpRender();
+}
+
+// Init picker dengan default hari ini
+(function initDrp() {
+  const t = todayStr();
+  drpSelStart = t; drpSelEnd = t;
+})();
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async () => {
   currentUser = await requireAuth();
@@ -76,12 +231,12 @@ function toggleDark() {
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   if (!currentUser) return;
-  const today = todayStr();
   try {
     const { data, error } = await sb.from('orderan_masuk')
       .select('*')
       .eq('cs_id', currentUser.id)
-      .eq('tanggal', today)
+      .gte('tanggal', filterDateStart)
+      .lte('tanggal', filterDateEnd)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -93,14 +248,20 @@ async function loadDashboard() {
     const hold   = todayOrders.filter(r => r.acc_spv === 'HOLD').length;
     const cancel = todayOrders.filter(r => r.acc_spv === 'CANCEL').length;
 
+    // Label sub sesuai range
+    const isSingleDay = filterDateStart === filterDateEnd;
+    const subLabel = isSingleDay
+      ? drpFmt(filterDateStart)
+      : `${drpFmt(filterDateStart)} — ${drpFmt(filterDateEnd)}`;
+    document.getElementById('dash-sub').textContent = `Orderan ${subLabel}`;
+    document.getElementById('dash-info').textContent = `${total} orderan`;
+    document.getElementById('dash-info-mobile').textContent = `${total} orderan`;
+
     document.getElementById('d-total').textContent  = total;
     document.getElementById('d-tunggu').textContent = tunggu;
     document.getElementById('d-kirim').textContent  = kirim;
     document.getElementById('d-hold').textContent   = hold;
     document.getElementById('d-cancel').textContent = cancel;
-    document.getElementById('dash-sub').textContent = `Orderan kamu hari ini — ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}`;
-    document.getElementById('dash-info').textContent = `${total} orderan`;
-    document.getElementById('dash-info-mobile').textContent = `${total} orderan hari ini`;
 
     renderDashTable(todayOrders);
     renderOrderCards(todayOrders);
@@ -670,7 +831,7 @@ function extractEkspedisi(pembayaran) {
 }
 
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // format YYYY-MM-DD WIB
 }
 
 function showValBanner(type, msg) {
