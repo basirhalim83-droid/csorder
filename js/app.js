@@ -107,43 +107,56 @@ function drpClickDay(y, m, d) {
 }
 
 function drpRender() {
+  const cal = document.getElementById('drp-cal');
+  if (!cal) return;
   const y = drpViewYear, m = drpViewMonth;
-  const firstDay  = new Date(y, m, 1).getDay();
-  const startPad  = firstDay === 0 ? 6 : firstDay - 1;
+  const firstDay    = new Date(y, m, 1).getDay();
+  const startPad    = firstDay === 0 ? 6 : firstDay - 1;
   const daysInMonth = new Date(y, m+1, 0).getDate();
-  const prevDays  = new Date(y, m, 0).getDate();
-  const todayS    = todayStr();
+  const prevDays    = new Date(y, m, 0).getDate();
+  const todayS      = todayStr();
 
-  let html = `<div class="drp-cal-hdr">
-    <button class="drp-nav" onclick="drpNav(-1)">‹</button>
-    <div class="drp-cal-title">${MONTHS_ID[m]} ${y}</div>
-    <button class="drp-nav" onclick="drpNav(1)">›</button>
-  </div>
-  <div class="drp-days-hdr">${DAYS_ID.map(d=>`<span>${d}</span>`).join('')}</div>
-  <div class="drp-days">`;
+  // Header bulan
+  let html = '<div class="drp-cal-hdr">'
+    + '<button class="drp-nav" onclick="drpNav(-1)">&#8249;</button>'
+    + '<div class="drp-cal-title">' + MONTHS_ID[m] + ' ' + y + '</div>'
+    + '<button class="drp-nav" onclick="drpNav(1)">&#8250;</button>'
+    + '</div>';
 
-  for (let i=startPad;i>0;i--) {
-    html += `<button class="drp-day other-month">${prevDays-i+1}</button>`;
+  // Header hari
+  html += '<div class="drp-days-hdr">';
+  for (var di = 0; di < DAYS_ID.length; di++) {
+    html += '<span>' + DAYS_ID[di] + '</span>';
   }
-  for (let d=1;d<=daysInMonth;d++) {
-    const cur = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isToday  = cur === todayS;
-    const isStart  = cur === drpSelStart;
-    const isEnd    = cur === drpSelEnd;
-    const inRange  = drpSelStart && drpSelEnd && cur > drpSelStart && cur < drpSelEnd;
-    let cls = 'drp-day';
-    if (isStart && isEnd)   cls += ' selected';
-    else if (isStart)       cls += ' range-start';
-    else if (isEnd)         cls += ' range-end';
-    else if (inRange)       cls += ' in-range';
-    if (isToday) cls += ' today';
-    html += `<button class="${cls}" onclick="drpClickDay(${y},${m},${d})">${d}</button>`;
+  html += '</div><div class="drp-days">';
+
+  // Hari bulan sebelumnya (padding)
+  for (var i = startPad; i > 0; i--) {
+    html += '<button class="drp-day other-month">' + (prevDays - i + 1) + '</button>';
   }
-  const total = startPad + daysInMonth;
-  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
-  for (let d=1;d<=rem;d++) html += `<button class="drp-day other-month">${d}</button>`;
+
+  // Hari bulan ini
+  for (var d = 1; d <= daysInMonth; d++) {
+    var mm  = String(m + 1).padStart(2, '0');
+    var dd  = String(d).padStart(2, '0');
+    var cur = y + '-' + mm + '-' + dd;
+    var cls = 'drp-day';
+    if (cur === drpSelStart && cur === drpSelEnd) cls += ' selected';
+    else if (cur === drpSelStart)  cls += ' range-start';
+    else if (cur === drpSelEnd)    cls += ' range-end';
+    else if (drpSelStart && drpSelEnd && cur > drpSelStart && cur < drpSelEnd) cls += ' in-range';
+    if (cur === todayS) cls += ' today';
+    html += '<button class="' + cls + '" onclick="drpClickDay(' + y + ',' + m + ',' + d + ')">' + d + '</button>';
+  }
+
+  // Padding akhir
+  var total = startPad + daysInMonth;
+  var rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (var r = 1; r <= rem; r++) {
+    html += '<button class="drp-day other-month">' + r + '</button>';
+  }
   html += '</div>';
-  document.getElementById('drp-cal').innerHTML = html;
+  cal.innerHTML = html;
 }
 
 function drpNav(dir) {
