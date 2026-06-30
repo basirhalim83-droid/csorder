@@ -102,13 +102,17 @@ body.app-body{display:flex;overflow-x:hidden}
 .mobile-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
 
 /* ── BOTTOM NAV (mobile only) ── */
-.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:var(--bottom-nav-h);background:var(--surface);border-top:1px solid var(--border);z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,0.08)}
-.bottom-nav-inner{display:flex;height:100%}
-.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--muted);transition:color 0.15s;-webkit-tap-highlight-color:transparent;user-select:none;border:none;background:none;font-family:var(--font)}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:var(--bottom-nav-h);background:var(--surface);border-top:1px solid var(--border);z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,0.07)}
+.bottom-nav-inner{display:flex;height:100%;width:100%}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;color:var(--muted);transition:all 0.2s;-webkit-tap-highlight-color:transparent;user-select:none;border:none;background:none;font-family:var(--font);position:relative;padding-bottom:2px}
+.bnav-item:active{opacity:0.7}
 .bnav-item.active{color:var(--accent)}
-.bnav-icon{font-size:22px;line-height:1}
-.bnav-label{font-size:10px;font-weight:600}
-.bnav-item.active .bnav-label{color:var(--accent)}
+.bnav-icon-wrap{width:36px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:20px;transition:background 0.2s}
+.bnav-item.active .bnav-icon-wrap{background:var(--accent-light)}
+.bnav-icon-wrap svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:all 0.2s}
+.bnav-item.active .bnav-icon-wrap svg{stroke:var(--accent);stroke-width:2.2}
+.bnav-label{font-size:10px;font-weight:500;letter-spacing:0.1px;transition:all 0.2s}
+.bnav-item.active .bnav-label{font-weight:700;color:var(--accent)}
 
 /* ── PAGES ── */
 .page{display:none;padding:1.25rem;flex:1}
@@ -263,6 +267,10 @@ tr.row-rts{background:var(--warn-light)!important}
   .bottom-nav{ display:flex }
   .mobile-user-btn{ display:flex }
   .topbar-date-desktop{ display:none }
+
+  /* Sembunyikan page title — sudah ada di topbar */
+  .page-title{ display:none }
+  .page-sub{ font-size:12px; margin-bottom:1rem }
 
   /* Page padding untuk bottom nav */
   .page{ padding:1rem; padding-bottom:calc(var(--bottom-nav-h) + 1.25rem) }
