@@ -166,10 +166,13 @@ function drpNav(dir) {
   drpRender();
 }
 
-// Init picker dengan default hari ini
+// Init picker — script ada di akhir body jadi DOM sudah siap, render langsung
 (function initDrp() {
-  const t = todayStr();
-  drpSelStart = t; drpSelEnd = t;
+  var t = todayStr();
+  drpSelStart = t;
+  drpSelEnd   = t;
+  drpRender();
+  drpUpdateSel();
 })();
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
