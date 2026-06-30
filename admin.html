@@ -53,6 +53,16 @@
       Fonnte / WA
     </div>
 
+    <div class="nav-item" id="nav-sku" onclick="switchPage('sku')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+      </span>
+      SKU Produk
+    </div>
+
     <div class="nav-section" style="margin-top:1.5rem">Navigasi</div>
     <div class="nav-item" onclick="window.location.href='app.html'">
       <span class="nav-icon">
@@ -253,6 +263,65 @@
     </div>
   </div>
 
+  <!-- ══ PAGE: SKU ══ -->
+  <div id="page-sku" class="page">
+    <div class="page-title">SKU Produk</div>
+    <div class="page-sub">Kelola kode SKU produk — dipakai untuk validasi nama customer, jumlah pesanan, dan keterangan</div>
+
+    <!-- Add form -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Tambah SKU</div>
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="f-group">
+          <label class="f-label">Kode SKU <span style="color:var(--muted)">(contoh: YOU1, HERB2)</span></label>
+          <input class="f-input" id="sku-kode" placeholder="YOU1" style="text-transform:uppercase" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Nama Produk</label>
+          <input class="f-input" id="sku-nama" placeholder="cth: Youzhi 1 Botol" />
+        </div>
+      </div>
+      <div class="f-group" style="margin-bottom:12px">
+        <label class="f-label">Keterangan <span style="color:var(--muted)">(opsional)</span></label>
+        <input class="f-input" id="sku-ket" placeholder="cth: 1 BOTOL NEW SALEP YOUZHI" />
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn-save" onclick="addSku()">Simpan SKU</button>
+        <span id="sku-add-status" style="font-size:12px;display:none"></span>
+      </div>
+    </div>
+
+    <!-- List -->
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700">SKU Terdaftar</span>
+        <button class="btn-secondary" onclick="loadSku()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 480px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Kode SKU</th>
+              <th>Nama Produk</th>
+              <th>Keterangan</th>
+              <th>Ditambahkan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="sku-tbody">
+            <tr><td colspan="6" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;padding:12px 16px;background:var(--accent-light);border-radius:var(--radius);border:1px solid var(--accent);font-size:12px;color:var(--accent);line-height:1.7">
+      <strong>Cara pakai:</strong> SKU muncul di nama customer setelah tanda <code>|</code> — contoh: <code>BUDI|YOU1</code> artinya customer Budi beli produk dengan kode SKU <strong>YOU1</strong>.
+      Sistem akan validasi apakah SKU dikenali dan cocok dengan jumlah pesanan &amp; keterangan.
+    </div>
+  </div>
+
 </div><!-- /main-area -->
 
 <div id="toast-wrap" class="toast-wrap"></div>
@@ -297,15 +366,81 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','users','fonnte'].forEach(p => {
+  ['overview','users','fonnte','sku'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender' };
+  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'users')  loadUsers();
   if (name === 'fonnte') loadFonnte();
+  if (name === 'sku')    loadSku();
+}
+
+// ── SKU ───────────────────────────────────────────────────────────────────────
+async function loadSku() {
+  const tbody = document.getElementById('sku-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Memuat...</td></tr>';
+  try {
+    const { data, error } = await sb.from('sku_produk')
+      .select('*').order('created_at', { ascending: true });
+    if (error) throw error;
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada SKU</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map((s, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td><span style="font-family:monospace;font-weight:700;color:var(--accent)">${s.kode}</span></td>
+        <td>${s.nama_produk}</td>
+        <td style="color:var(--muted)">${s.keterangan || '—'}</td>
+        <td style="color:var(--muted)">${new Date(s.created_at).toLocaleDateString('id-ID')}</td>
+        <td><button class="btn-del" onclick="deleteSku('${s.id}')">Hapus</button></td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function addSku() {
+  const kode   = document.getElementById('sku-kode').value.trim().toUpperCase();
+  const nama   = document.getElementById('sku-nama').value.trim();
+  const ket    = document.getElementById('sku-ket').value.trim();
+  const status = document.getElementById('sku-add-status');
+
+  if (!kode || !nama) { showToast('Kode SKU dan Nama Produk wajib diisi', 'error'); return; }
+
+  status.style.display = 'inline';
+  status.textContent   = 'Menyimpan...';
+  status.style.color   = 'var(--muted)';
+
+  try {
+    const { error } = await sb.from('sku_produk').insert({ kode, nama_produk: nama, keterangan: ket || null });
+    if (error) throw error;
+    status.textContent = '✓ Tersimpan';
+    status.style.color = '#22c55e';
+    document.getElementById('sku-kode').value = '';
+    document.getElementById('sku-nama').value = '';
+    document.getElementById('sku-ket').value  = '';
+    await loadSku();
+    setTimeout(() => { status.style.display = 'none'; }, 2000);
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+async function deleteSku(id) {
+  if (!confirm('Hapus SKU ini?')) return;
+  try {
+    const { error } = await sb.from('sku_produk').delete().eq('id', id);
+    if (error) throw error;
+    await loadSku();
+  } catch(e) {
+    showToast('Gagal hapus: ' + e.message, 'error');
+  }
 }
 
 // ── DARK MODE ─────────────────────────────────────────────────────────────────
