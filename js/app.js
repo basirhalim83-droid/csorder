@@ -541,6 +541,14 @@ async function validateWilayah() {
   } catch(_) { /* gagal → skip validasi */ }
 }
 
+function confirmSubmitCancel() {
+  document.getElementById('confirm-overlay').style.display = 'none';
+}
+function confirmSubmitOk() {
+  document.getElementById('confirm-overlay').style.display = 'none';
+  doSubmitExec();
+}
+
 function applyKodepos(val) {
   const el = document.getElementById('f-kodepos');
   if (el) { el.value = val; valSetField('kodepos', 'ok'); }
@@ -702,11 +710,17 @@ async function doSubmit() {
   ].filter(f => document.getElementById('f-' + f.id)?.classList.contains('val-err'));
 
   if (errorFields.length > 0) {
-    const labelList = errorFields.map(f => `• ${f.label}`).join('\n');
-    const lanjut = confirm(`⚠️ Ada ${errorFields.length} field yang tidak valid:\n\n${labelList}\n\nYakin ingin tetap submit?`);
-    if (!lanjut) return;
+    const labelList = errorFields.map(f => `• ${f.label}`).join('<br>');
+    document.getElementById('confirm-body').innerHTML = labelList;
+    document.getElementById('confirm-overlay').style.display = 'flex';
+    return; // tunggu user klik di modal
   }
 
+  doSubmitExec();
+}
+
+async function doSubmitExec() {
+  const form    = getFormValues();
   const btn     = document.getElementById('btn-submit');
   const loading = document.getElementById('loading-submit');
   btn.disabled  = true;
