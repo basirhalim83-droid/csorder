@@ -403,6 +403,7 @@ async function doParse() {
     document.getElementById('btn-submit').disabled = false;
     showToast('Parsing berhasil! Periksa hasilnya.', 'success');
     validateWilayah();
+    validateEkspedisi();
 
     // Scroll ke preview
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -544,6 +545,58 @@ function applyKodepos(val) {
   if (el) { el.value = val; valSetField('kodepos', 'ok'); }
 }
 
+// ── VALIDASI EKSPEDISI (No Order vs Pembayaran) ───────────────────────────────
+const EKSPEDISI_LIST = [
+  { key: 'JNE',      pattern: /\bJNE\b/i },
+  { key: 'JNT',      pattern: /\bJ[&\+]?T\b|JALUR\s*NUGRAHA/i },
+  { key: 'SICEPAT',  pattern: /\bSICEPAT\b|\bSICE\b/i },
+  { key: 'ANTERAJA', pattern: /\bANTERAJA\b|\bANTER\b/i },
+  { key: 'NINJA',    pattern: /\bNINJA\b/i },
+  { key: 'SAP',      pattern: /\bSAP\b/i },
+  { key: 'LION',     pattern: /\bLION\b/i },
+  { key: 'TIKI',     pattern: /\bTIKI\b/i },
+  { key: 'POS',      pattern: /\bPOS\s*INDONESIA\b|\bPOS\b/i },
+  { key: 'REX',      pattern: /\bREX\b/i },
+  { key: 'IDEXPRESS',pattern: /\bID\s*EXPRESS\b|\bIDEX\b/i },
+  { key: 'GRAB',     pattern: /\bGRAB\b/i },
+  { key: 'GOJEK',    pattern: /\bGOJEK\b|\bGOSEND\b/i },
+];
+
+function extractEkspedisi(text) {
+  if (!text) return null;
+  for (const e of EKSPEDISI_LIST) {
+    if (e.pattern.test(text)) return e.key;
+  }
+  return null;
+}
+
+function validateEkspedisi() {
+  const noVal  = document.getElementById('f-no')?.value || '';
+  const bayVal = document.getElementById('f-pembayaran')?.value || '';
+
+  // Reset hint no & pembayaran dulu
+  ['no','pembayaran'].forEach(id => {
+    const el   = document.getElementById('f-' + id);
+    const hint = document.getElementById('hint-' + id);
+    if (el)   el.classList.remove('val-ok','val-err','val-warn');
+    if (hint) { hint.className = 'val-hint'; hint.innerHTML = ''; }
+  });
+
+  const ekspNo  = extractEkspedisi(noVal);
+  const ekspBay = extractEkspedisi(bayVal);
+
+  // Kalau salah satu tidak ada ekspedisi → skip
+  if (!ekspNo || !ekspBay) return;
+
+  if (ekspNo === ekspBay) {
+    valSetField('no',         'ok', `✓ ${ekspNo}`);
+    valSetField('pembayaran', 'ok', `✓ ${ekspBay}`);
+  } else {
+    valSetField('no',         'err', `⚠ Ekspedisi: ${ekspNo} — tidak cocok dengan Pembayaran (${ekspBay})`);
+    valSetField('pembayaran', 'err', `⚠ Ekspedisi: ${ekspBay} — tidak cocok dengan No Order (${ekspNo})`);
+  }
+}
+
 // Re-validasi saat CS edit manual — debounce 800ms
 let _valTimer = null;
 function scheduleValidasi() {
@@ -554,6 +607,10 @@ function scheduleValidasi() {
 ['f-kelurahan','f-kecamatan','f-kabupaten','f-provinsi','f-kodepos'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', scheduleValidasi);
+});
+['f-no','f-pembayaran'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', validateEkspedisi);
 });
 
 function getFormValues() {
