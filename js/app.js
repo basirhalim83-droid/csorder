@@ -192,6 +192,7 @@ function drpNav(dir) {
     document.getElementById('theme-icon-mobile').textContent = '☀️';
   }
 
+  trkInitDates();
   await loadDashboard();
   await loadHistoryMini();
   checkAndShowLockBanner();
@@ -199,7 +200,7 @@ function drpNav(dir) {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['dashboard','upload','setting'].forEach(p => {
+  ['dashboard','upload','tracking','setting'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     // Sidebar nav (desktop)
     const navEl = document.getElementById('nav-'+p);
@@ -208,10 +209,11 @@ function switchPage(name) {
     const bnavEl = document.getElementById('bnav-'+p);
     if (bnavEl) bnavEl.classList.toggle('active', p===name);
   });
-  const titles = { dashboard:'Dashboard', upload:'Upload Order', setting:'Setting' };
+  const titles = { dashboard:'Dashboard', upload:'Upload Order', tracking:'Tracking Order', setting:'Setting' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') loadDashboard();
   if (name === 'upload')    { loadHistoryMini(); checkAndShowLockBanner(); }
+  if (name === 'tracking')  loadTracking();
   if (name === 'setting')   loadSetting();
 }
 
@@ -1304,4 +1306,237 @@ function showToast(msg, type = 'info') {
   t.textContent = msg;
   wrap.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ── TRACKING ORDER ────────────────────────────────────────────────────────────
+let trkAllData = []; // cache untuk applyTrkFilter tanpa re-query
+
+function trkInitDates() {
+  // Default: 30 hari terakhir
+  const today = todayStr();
+  const d30   = new Date();
+  d30.setDate(d30.getDate() - 29);
+  const start = d30.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const startEl = document.getElementById('trk-start');
+  const endEl   = document.getElementById('trk-end');
+  if (startEl && !startEl.value) startEl.value = start;
+  if (endEl   && !endEl.value)   endEl.value   = today;
+}
+
+async function loadTracking() {
+  if (!currentUser) return;
+  trkInitDates();
+
+  const trkStart = document.getElementById('trk-start')?.value || todayStr();
+  const trkEnd   = document.getElementById('trk-end')?.value   || todayStr();
+
+  const tbody = document.getElementById('trk-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Memuat data...</td></tr>';
+  document.getElementById('trk-info')?.setAttribute('data-full', '0');
+
+  try {
+    // 1. Ambil order CS di rentang tanggal ini
+    const { data: masukData, error: masukErr } = await sb.from('orderan_masuk')
+      .select('hp, nama, tanggal')
+      .eq('cs_id', currentUser.id)
+      .gte('tanggal', trkStart)
+      .lte('tanggal', trkEnd);
+
+    if (masukErr) throw masukErr;
+
+    const masukList = masukData || [];
+    if (!masukList.length) {
+      trkAllData = [];
+      updateTrkCards([]);
+      document.getElementById('trk-alerts').innerHTML = '';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada orderan di periode ini.</td></tr>';
+      document.getElementById('trk-info').textContent = '0 data';
+      document.getElementById('trk-info-mobile').textContent = '0 data';
+      document.getElementById('trk-cards').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Tidak ada data di periode ini.</div>';
+      return;
+    }
+
+    // 2. Kumpulkan HP unik, convert ke format 8xxx (all_orderan)
+    const hpSet = new Set();
+    masukList.forEach(r => {
+      let hp = (r.hp || '').replace(/\D/g, '');
+      if (hp.startsWith('62')) hp = hp.slice(2);
+      if (hp.startsWith('0'))  hp = hp.slice(1);
+      if (hp) hpSet.add(hp);
+    });
+
+    const hpList = Array.from(hpSet);
+    if (!hpList.length) {
+      trkAllData = [];
+      updateTrkCards([]);
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada data HP valid.</td></tr>';
+      return;
+    }
+
+    // 3. Query all_orderan by HP list
+    const { data: allData, error: allErr } = await sb.from('all_orderan')
+      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+      .in('hp', hpList)
+      .order('tanggal', { ascending: false })
+      .limit(500);
+
+    if (allErr) throw allErr;
+
+    trkAllData = allData || [];
+
+    updateTrkCards(trkAllData);
+    showTrkAlerts(trkAllData);
+    applyTrkFilter();
+
+  } catch(e) {
+    showToast('Gagal load tracking: ' + e.message, 'error');
+    const tbody = document.getElementById('trk-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Gagal memuat data.</td></tr>';
+  }
+}
+
+function applyTrkFilter() {
+  const statusF = document.getElementById('trk-filter-status')?.value || '';
+  const eksF    = document.getElementById('trk-filter-eks')?.value    || '';
+  const search  = (document.getElementById('trk-search')?.value || '').toLowerCase();
+
+  let filtered = trkAllData;
+
+  if (statusF) filtered = filtered.filter(r => getTrkStatusCategory(r.status_akhir) === statusF);
+  if (eksF)    filtered = filtered.filter(r => extractEkspedisi(r.pembayaran) === eksF);
+  if (search)  filtered = filtered.filter(r =>
+    (r.nama   || '').toLowerCase().includes(search) ||
+    (r.hp     || '').includes(search)               ||
+    (r.resi   || '').toLowerCase().includes(search)
+  );
+
+  renderTrkTable(filtered);
+  renderTrkCards(filtered);
+  const info = filtered.length < trkAllData.length
+    ? `${filtered.length} dari ${trkAllData.length} data`
+    : `${trkAllData.length} data`;
+  document.getElementById('trk-info').textContent = info;
+  document.getElementById('trk-info-mobile').textContent = info;
+}
+
+function getTrkStatusCategory(s) {
+  if (!s) return 'proses';
+  const v = s.toLowerCase();
+  if (v.includes('retur') || v.includes('return') || v === 'rts') return 'retur';
+  if (v.includes('delivered') || v.includes('terkirim') || v.includes('sukses')
+      || v.includes('success') || v === 'dlv') return 'delivered';
+  if (v.includes('undell') || v.includes('undelivery') || v.includes('tidak terkirim')) return 'undell';
+  return 'proses';
+}
+
+function getTrkStatusBadge(s) {
+  const cat   = getTrkStatusCategory(s);
+  const label = s || 'On Proses';
+  if (cat === 'delivered') return `<span class="badge badge-kirim">✓ ${label}</span>`;
+  if (cat === 'retur')     return `<span class="badge badge-rts">↩ ${label}</span>`;
+  if (cat === 'undell')    return `<span class="badge badge-hold">⏸ ${label}</span>`;
+  return `<span class="badge badge-pending">${label}</span>`;
+}
+
+function updateTrkCards(list) {
+  const total     = list.length;
+  const proses    = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'proses').length;
+  const undell    = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'undell').length;
+  const delivered = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'delivered').length;
+  const retur     = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'retur').length;
+  document.getElementById('trk-total').textContent     = total     || '—';
+  document.getElementById('trk-proses').textContent    = proses    || '—';
+  document.getElementById('trk-undell').textContent    = undell    || '—';
+  document.getElementById('trk-delivered').textContent = delivered || '—';
+  document.getElementById('trk-retur').textContent     = retur     || '—';
+}
+
+function showTrkAlerts(list) {
+  const wrap = document.getElementById('trk-alerts');
+  if (!wrap) return;
+
+  const alerts = [];
+
+  const undellCount = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'undell').length;
+  if (undellCount > 0) {
+    alerts.push(`<div class="trk-alert trk-alert-warn">⚠️ <strong>${undellCount} paket</strong> berstatus Undell — segera hubungi customer untuk konfirmasi pengiriman ulang.</div>`);
+  }
+
+  // On Proses > 7 hari
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = cutoff.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const oldProses = list.filter(r =>
+    getTrkStatusCategory(r.status_akhir) === 'proses' &&
+    r.tanggal && r.tanggal < cutoffStr
+  ).length;
+  if (oldProses > 0) {
+    alerts.push(`<div class="trk-alert trk-alert-info">🕐 <strong>${oldProses} paket</strong> masih On Proses lebih dari 7 hari — cek resi atau konfirmasi ke ekspedisi.</div>`);
+  }
+
+  wrap.innerHTML = alerts.join('');
+}
+
+function renderTrkTable(list) {
+  const tbody = document.getElementById('trk-tbody');
+  if (!tbody) return;
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada data yang cocok.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(r => {
+    const eks       = extractEkspedisi(r.pembayaran) || r.pembayaran || '—';
+    const hp08      = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
+    const resiHtml  = r.resi
+      ? `<a href="https://cekresi.com/?noresi=${encodeURIComponent(r.resi)}" target="_blank" rel="noopener" class="trk-resi-link">${r.resi} ↗</a>`
+      : '<span style="color:var(--muted)">—</span>';
+    const statusBadge = getTrkStatusBadge(r.status_akhir);
+
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.tanggal || '—'}</td>
+      <td title="${r.nama || ''}">${r.nama || '—'}</td>
+      <td style="font-family:var(--mono);font-size:12px">${hp08}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.no || '—'}</td>
+      <td style="font-size:12px">${eks}</td>
+      <td style="font-family:var(--mono);font-size:11px">${resiHtml}</td>
+      <td style="font-size:12px">${r.jumlah || '—'}</td>
+      <td style="font-size:12px">${r.kabupaten || '—'}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTrkCards(list) {
+  const wrap = document.getElementById('trk-cards');
+  if (!wrap) return;
+  if (!list.length) {
+    wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Tidak ada data yang cocok.</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(r => {
+    const eks      = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
+    const hp08     = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
+    const cat      = getTrkStatusCategory(r.status_akhir);
+    const cardCls  = cat === 'delivered' ? 'oc-kirim' : cat === 'retur' ? 'oc-rts' : cat === 'undell' ? 'oc-hold' : '';
+    const badge    = getTrkStatusBadge(r.status_akhir);
+    const resiPart = r.resi
+      ? `<a href="https://cekresi.com/?noresi=${encodeURIComponent(r.resi)}" target="_blank" rel="noopener" class="trk-resi-link" style="font-size:11px">${r.resi} ↗</a>`
+      : '<span style="color:var(--muted);font-size:11px">Belum ada resi</span>';
+    return `<div class="order-card ${cardCls}">
+      <div class="oc-header">
+        <span class="oc-nama">${r.nama || '—'}</span>
+        <span class="oc-waktu">${r.tanggal || ''}</span>
+      </div>
+      <div class="oc-row">
+        <span class="oc-hp">📱 ${hp08}</span>
+        <span style="color:var(--border-strong)">·</span>
+        <span style="font-size:12px">${eks}</span>
+      </div>
+      <div class="oc-row" style="margin-top:2px">${resiPart}</div>
+      <div class="oc-footer">
+        <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
 }
