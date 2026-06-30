@@ -386,7 +386,55 @@ async function doSubmit() {
     if (isRTS)      masalah.push('🔴 PERNAH RTS — customer ini pernah retur barang');
 
     if (masalah.length > 0 && profile.no_wa) {
-      const msg = `⚠️ *Notifikasi ValidasiOrder*\n\nHalo ${profile.nama} 👋\n\nOrder yang baru kamu input terdeteksi masalah:\n\n👤 *Nama:* ${form.nama}\n📱 *HP:* ${form.hp}\n\n${masalah.join('\n')}\n\nMohon konfirmasi ke SPV sebelum order dilanjutkan ya!`;
+      const csName = profile.nama || 'CS';
+
+      // Info customer
+      const totalRp = form.total_pembayaran
+        ? 'Rp' + Number(form.total_pembayaran).toLocaleString('id-ID')
+        : '—';
+      const produkLine = [form.jumlah_pesanan, form.pembayaran, totalRp]
+        .filter(Boolean).join(' / ');
+
+      // Detail per flag
+      const flagLines = [];
+
+      if (isDupToday) {
+        const detail = dupToday.map(m => {
+          const jam = new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          return `   → Sudah diinput oleh ${m.cs_nama||'CS lain'} jam ${jam}`;
+        }).join('\n');
+        flagLines.push(`⚠️ *DUPLIKAT HARI INI*\n${detail}`);
+      }
+
+      if (isDupAll) {
+        const matches = allOrderan
+          .filter(m => !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur'))
+          .slice(0, 3);
+        const detail = matches.length
+          ? matches.map(m => `   → Pernah order${m.tanggal ? ' '+m.tanggal : ''}${m.team ? ' ('+m.team+')' : ''}${m.cs ? ' · CS: '+m.cs : ''}`).join('\n')
+          : '   → Data historis ditemukan';
+        flagLines.push(`ℹ️ *DUPLIKAT ALL TEAM*\n${detail}`);
+      }
+
+      if (isRTS) {
+        const detail = rtsData.slice(0, 3).map(m => {
+          const alasan = m.alasan || m.reason || '';
+          const tgl    = m.tanggal || m.bulan || '';
+          return `   → ${alasan ? 'Alasan: '+alasan : 'Pernah retur'}${tgl ? ' ('+tgl+')' : ''}`;
+        }).join('\n') || '   → Riwayat retur ditemukan';
+        flagLines.push(`🔴 *PERNAH RTS*\n${detail}`);
+      }
+
+      const msg =
+        `⚠️ *CS Input — Peringatan Order*\n\n` +
+        `Halo ${csName} 👋\n` +
+        `Order baru kamu ada masalah:\n\n` +
+        `👤 Nama  : ${form.nama||'—'}\n` +
+        `📱 HP    : ${form.hp||'—'}\n` +
+        `📦 Produk: ${produkLine||'—'}\n\n` +
+        flagLines.join('\n\n') +
+        `\n\nMohon segera konfirmasi ke validator sebelum order dilanjutkan.\nTerima Kasih 🙏`;
+
       try {
         await fetch('/api/notif', {
           method: 'POST',
