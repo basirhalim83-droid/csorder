@@ -318,8 +318,8 @@ async function doSubmit() {
 
     const insertedId = inserted.id;
 
-    // 2. Validasi — jalankan parallel
-    const [dupTodayRes, dupAllRes, rtsRes] = await Promise.all([
+    // 2. Validasi — dupToday & allOrderan parallel
+    const [dupTodayRes, allOrderanRes] = await Promise.all([
       // Cek dup hari ini (HP sama, hari sama, bukan row ini sendiri)
       hpNorm ? sb.from('orderan_masuk')
         .select('id, nama, cs_nama, created_at')
@@ -328,35 +328,50 @@ async function doSubmit() {
         .neq('id', insertedId)
         .limit(5) : Promise.resolve({ data: [] }),
 
-      // Cek dup all team (di all_orderan historis)
+      // Cek dup all team + ambil status_akhir & resi untuk deteksi RTS
       hpNorm ? sb.from('all_orderan')
-        .select('nama, hp, tanggal, cs, team')
+        .select('nama, hp, tanggal, cs, team, status_akhir, resi')
         .eq('hp', hpNorm)
-        .limit(5) : Promise.resolve({ data: [] }),
-
-      // Cek pernah RTS (all_orderan dengan retur)
-      hpNorm ? sb.from('all_orderan')
-        .select('nama, resi, status_akhir, retur')
-        .eq('hp', hpNorm)
-        .not('retur', 'is', null)
-        .neq('retur', '')
-        .limit(3) : Promise.resolve({ data: [] })
+        .limit(10) : Promise.resolve({ data: [] }),
     ]);
 
-    const dupToday = dupTodayRes.data || [];
-    const dupAll   = dupAllRes.data   || [];
-    const rtsData  = rtsRes.data      || [];
+    const dupToday   = dupTodayRes.data   || [];
+    const allOrderan = allOrderanRes.data || [];
 
     const isDupToday = dupToday.length > 0;
-    const isDupAll   = dupAll.length   > 0;
-    const isRTS      = rtsData.length  > 0;
+    const isDupAll   = allOrderan.length > 0;
+
+    // RTS: cek status_akhir mengandung kata 'retur' (sama persis dengan ValidasiOrder)
+    const returMatches = allOrderan.filter(m =>
+      m.status_akhir && m.status_akhir.toLowerCase().includes('retur')
+    );
+    const isRTS = returMatches.length > 0;
+
+    // Kalau ada retur → ambil detail dari all_rts via resi
+    let rtsData = [];
+    if (isRTS) {
+      const resiList = returMatches.map(m => m.resi).filter(Boolean);
+      if (resiList.length) {
+        const { data: rtsRows } = await sb.from('all_rts')
+          .select('resi, nama, hp, alasan, tanggal')
+          .in('resi', resiList)
+          .limit(5);
+        rtsData = rtsRows || [];
+      }
+      // Fallback kalau all_rts kosong, pakai data dari all_orderan
+      if (!rtsData.length) rtsData = returMatches;
+    }
+
+    const dupAll = allOrderan.filter(m =>
+      !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur')
+    );
 
     // 3. Update row dengan hasil validasi
     const valUpdate = {
       is_dup_today: isDupToday,
       is_dup_all  : isDupAll,
       is_rts      : isRTS,
-      dup_detail  : isDupAll ? dupAll : null,
+      dup_detail  : isDupAll ? allOrderan : null,
       rts_detail  : isRTS ? rtsData : null,
     };
 
