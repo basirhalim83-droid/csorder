@@ -446,7 +446,7 @@ function parseOrderRegex(text) {
   const keluhanIdx = lines.findIndex(l => /^KELUHAN\s*:/i.test(l));
   if (totalIdx >= 0 && keluhanIdx > totalIdx) {
     const between = lines.slice(totalIdx + 1, keluhanIdx)
-      .filter(l => !/[+=]/.test(l) && !/^\d/.test(l) && l.length > 2);
+      .filter(l => !/[+=]/.test(l) && !/^\d+$/.test(l) && l.length > 2);
     result.keterangan = between.join('\n').trim();
   }
 
