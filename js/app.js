@@ -300,7 +300,8 @@ async function doSubmit() {
 
   try {
     const today   = todayStr();
-    const hpNorm  = normalizeHP(form.hp);
+    const hpNorm  = normalizeHP(form.hp);           // format 08xxx (untuk orderan_masuk)
+    const hpDB    = hpNorm.startsWith('0') ? hpNorm.slice(1) : hpNorm; // format 8xxx (untuk all_orderan)
     const profile  = currentProfile;
 
     // 1. Insert ke orderan_masuk
@@ -329,9 +330,10 @@ async function doSubmit() {
         .limit(5) : Promise.resolve({ data: [] }),
 
       // Cek dup all team + ambil status_akhir & resi untuk deteksi RTS
-      hpNorm ? sb.from('all_orderan')
+      // all_orderan simpan HP format 8xxx (tanpa leading 0) → pakai hpDB
+      hpDB ? sb.from('all_orderan')
         .select('nama, hp, tanggal, cs, team, status_akhir, resi')
-        .eq('hp', hpNorm)
+        .eq('hp', hpDB)
         .limit(10) : Promise.resolve({ data: [] }),
     ]);
 
