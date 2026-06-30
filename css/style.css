@@ -173,6 +173,7 @@ tbody td{padding:9px 12px;vertical-align:middle;white-space:nowrap;max-width:200
 .badge-dup{background:#faf5ff;color:#9333ea}
 .badge-rts{background:var(--warn-light);color:#b45309}
 .badge-ok{background:var(--success-light);color:var(--success)}
+.badge-warn{background:#fef3c7;color:#92400e}
 
 /* ── UPLOAD FORM ── */
 .paste-area{width:100%;min-height:180px;padding:13px;border:1.5px solid var(--border-strong);border-radius:10px;font-size:13px;font-family:var(--mono);background:var(--bg);color:var(--text);resize:vertical;outline:none;transition:border-color 0.15s;line-height:1.7;-webkit-appearance:none}
