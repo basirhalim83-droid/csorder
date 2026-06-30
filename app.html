@@ -86,21 +86,21 @@
           <span style="color:var(--muted)">▾</span>
         </button>
         <div class="drp-dropdown" id="drp-dropdown">
-          <div class="drp-presets">
-            <button class="drp-preset active" onclick="drpPreset(1,'Hari Ini',this)">Hari Ini</button>
-            <button class="drp-preset" onclick="drpPresetYesterday(this)">Kemarin</button>
+          <div class="drp-presets" style="width:145px;flex-shrink:0;border-right:1px solid var(--border);padding:10px 0">
+            <button class="drp-preset active" onclick="drpPreset(1,'Hari Ini',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--accent);font-weight:600">Hari Ini</button>
+            <button class="drp-preset" onclick="drpPresetYesterday(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Kemarin</button>
             <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
-            <button class="drp-preset" onclick="drpPreset(7,'7 Hari Terakhir',this)">7 Hari Terakhir</button>
-            <button class="drp-preset" onclick="drpPreset(14,'14 Hari Terakhir',this)">14 Hari Terakhir</button>
-            <button class="drp-preset" onclick="drpPreset(30,'30 Hari Terakhir',this)">30 Hari Terakhir</button>
+            <button class="drp-preset" onclick="drpPreset(7,'7 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">7 Hari Terakhir</button>
+            <button class="drp-preset" onclick="drpPreset(14,'14 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">14 Hari Terakhir</button>
+            <button class="drp-preset" onclick="drpPreset(30,'30 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">30 Hari Terakhir</button>
             <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
-            <button class="drp-preset" onclick="drpPresetThisMonth(this)">Bulan Ini</button>
-            <button class="drp-preset" onclick="drpPresetLastMonth(this)">Bulan Lalu</button>
+            <button class="drp-preset" onclick="drpPresetThisMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Ini</button>
+            <button class="drp-preset" onclick="drpPresetLastMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Lalu</button>
           </div>
-          <div style="display:flex;flex-direction:column;flex:1">
-            <div class="drp-cal" id="drp-cal"></div>
-            <div class="drp-footer">
-              <div class="drp-sel-txt">
+          <div style="display:flex;flex-direction:column;flex:1;min-width:280px">
+            <div class="drp-cal" id="drp-cal" style="padding:14px;flex:1"></div>
+            <div class="drp-footer" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--muted)">
                 <span id="drp-sel-start">—</span> → <span id="drp-sel-end">—</span>
               </div>
               <div style="display:flex;gap:6px">
