@@ -1376,10 +1376,11 @@ async function loadTracking() {
       return;
     }
 
-    // 3. Query all_orderan by HP list + tanggal range yang sama
-    //    Supaya tidak ikut ambil orderan lama dari customer yang sama
+    // 3. Query all_orderan: filter sumber='cs_input' + HP + tanggal range
+    //    sumber='cs_input' memastikan tidak ikut ambil orderan lama dari ValidasiOrder
     const { data: allData, error: allErr } = await sb.from('all_orderan')
       .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+      .eq('sumber', 'cs_input')
       .in('hp', hpList)
       .gte('tanggal', trkStart)
       .lte('tanggal', trkEnd)
@@ -1388,8 +1389,7 @@ async function loadTracking() {
 
     if (allErr) throw allErr;
 
-    // 4. Filter lagi: hanya baris yang tanggal-nya cocok dengan tanggal order CS
-    //    (antisipasi kalau ada HP sama yang kebetulan pesan di hari berbeda dalam range)
+    // 4. Filter tambahan: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
     const filtered = (allData || []).filter(r => {
       const tgl = (r.tanggal || '').slice(0, 10);
       return hpTanggalMap[r.hp]?.has(tgl);
