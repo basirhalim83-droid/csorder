@@ -405,6 +405,7 @@ async function doParse() {
     validateWilayah();
     validateEkspedisi();
     validateRincian();
+    validateSKU();
 
     // Scroll ke preview
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -554,6 +555,73 @@ function applyKodepos(val) {
   if (el) { el.value = val; valSetField('kodepos', 'ok'); }
 }
 
+// ── VALIDASI SKU ──────────────────────────────────────────────────────────────
+let skuCache = null; // cache biar tidak fetch tiap kali
+
+async function getSkuList() {
+  if (skuCache) return skuCache;
+  try {
+    const { data } = await sb.from('sku_produk').select('kode,nama_produk');
+    skuCache = data || [];
+  } catch(_) { skuCache = []; }
+  return skuCache;
+}
+
+function parseSKUFromNama(nama) {
+  // Format: "BUDI|YOU1" → { kode: 'YOU', qty: 1 }
+  if (!nama || !nama.includes('|')) return null;
+  const skuRaw = nama.split('|')[1]?.trim().toUpperCase() || '';
+  if (!skuRaw) return null;
+  const match = skuRaw.match(/^([A-Z]+)(\d*)$/);
+  if (!match) return null;
+  return { kode: match[1], qty: parseInt(match[2] || '1', 10) || 1, raw: skuRaw };
+}
+
+async function validateSKU() {
+  const namaVal = (document.getElementById('f-nama')?.value    || '').trim();
+  const jumlahVal= (document.getElementById('f-jumlah')?.value || '').trim();
+  const ketVal  = (document.getElementById('f-keterangan')?.value || '').trim();
+
+  // Reset hints
+  ['nama','jumlah','keterangan'].forEach(id => {
+    const el   = document.getElementById('f-' + id);
+    const hint = document.getElementById('hint-' + id);
+    if (el)   el.classList.remove('val-ok','val-err','val-warn');
+    if (hint) { hint.className = 'val-hint'; hint.innerHTML = ''; }
+  });
+
+  const parsed = parseSKUFromNama(namaVal);
+  if (!parsed) return; // tidak ada SKU di nama → skip
+
+  const skuList   = await getSkuList();
+  const skuRecord = skuList.find(s => s.kode.toUpperCase() === parsed.kode);
+
+  if (!skuRecord) {
+    valSetField('nama', 'err', `⚠ SKU "${parsed.kode}" tidak dikenali`);
+    return;
+  }
+
+  valSetField('nama', 'ok', `✓ ${skuRecord.nama_produk} × ${parsed.qty}`);
+
+  const produkNorm = skuRecord.nama_produk.toUpperCase();
+  // Cek tiap kata nama produk (min 3 huruf) ada di jumlah/keterangan
+  const keywords = produkNorm.split(/\s+/).filter(w => w.length >= 3);
+
+  if (jumlahVal) {
+    const jumlahUp = jumlahVal.toUpperCase();
+    const match = keywords.some(w => jumlahUp.includes(w));
+    if (match) valSetField('jumlah', 'ok');
+    else valSetField('jumlah', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan di jumlah pesanan`);
+  }
+
+  if (ketVal) {
+    const ketUp = ketVal.toUpperCase();
+    const match = keywords.some(w => ketUp.includes(w));
+    if (match) valSetField('keterangan', 'ok');
+    else valSetField('keterangan', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan di keterangan`);
+  }
+}
+
 // ── VALIDASI EKSPEDISI (No Order vs Pembayaran) ───────────────────────────────
 const EKSPEDISI_LIST = [
   { key: 'JNE',      pattern: /\bJNE\b/i },
@@ -661,6 +729,10 @@ function scheduleValidasi() {
 ['f-rincian','f-total'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', validateRincian);
+});
+['f-nama','f-jumlah','f-keterangan'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => validateSKU());
 });
 
 function getFormValues() {
