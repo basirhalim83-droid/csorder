@@ -568,11 +568,11 @@ async function getSkuList() {
 }
 
 function parseSKUFromNama(nama) {
-  // Format: "BUDI|YOU1" → { kode: 'YOU', qty: 1 }
+  // Format: "BUDI|YOU1" atau "BUDI|YOU 1" → { kode: 'YOU', qty: 1 }
   if (!nama || !nama.includes('|')) return null;
   const skuRaw = nama.split('|')[1]?.trim().toUpperCase() || '';
   if (!skuRaw) return null;
-  const match = skuRaw.match(/^([A-Z]+)(\d*)$/);
+  const match = skuRaw.match(/^([A-Z]+)\s*(\d*)$/);
   if (!match) return null;
   return { kode: match[1], qty: parseInt(match[2] || '1', 10) || 1, raw: skuRaw };
 }
@@ -604,16 +604,35 @@ async function validateSKU() {
   valSetField('nama', 'ok', `✓ ${skuRecord.nama_produk} × ${parsed.qty}`);
 
   const produkNorm = skuRecord.nama_produk.toUpperCase();
-  // Cek tiap kata nama produk (min 3 huruf) ada di jumlah/keterangan
-  const keywords = produkNorm.split(/\s+/).filter(w => w.length >= 3);
+  const keywords   = produkNorm.split(/\s+/).filter(w => w.length >= 3);
 
-  if (jumlahVal) {
-    const jumlahUp = jumlahVal.toUpperCase();
-    const match = keywords.some(w => jumlahUp.includes(w));
-    if (match) valSetField('jumlah', 'ok');
-    else valSetField('jumlah', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan di jumlah pesanan`);
+  // ── Cek qty SKU vs field QTY ──────────────────────────────────────────────
+  const qtyField = parseInt((document.getElementById('f-quantity')?.value || '').trim(), 10);
+  if (qtyField && qtyField !== parsed.qty) {
+    valSetField('nama', 'warn',
+      `⚠ SKU qty ${parsed.qty} tapi QTY field ${qtyField} — pastikan yang benar`
+    );
   }
 
+  // ── Cek jumlah pesanan ────────────────────────────────────────────────────
+  if (jumlahVal) {
+    const jumlahUp  = jumlahVal.toUpperCase();
+    const prodMatch = keywords.some(w => jumlahUp.includes(w));
+
+    // Cek angka qty di awal jumlah pesanan
+    const qtyJumlah = parseInt(jumlahVal.match(/^\d+/)?.[0] || '0', 10);
+    const qtyOk     = !qtyJumlah || qtyJumlah === parsed.qty;
+
+    if (prodMatch && qtyOk) {
+      valSetField('jumlah', 'ok');
+    } else if (!prodMatch) {
+      valSetField('jumlah', 'err', `⚠ Produk "${skuRecord.nama_produk}" tidak ditemukan`);
+    } else {
+      valSetField('jumlah', 'warn', `⚠ Qty di jumlah pesanan (${qtyJumlah}) tidak cocok dengan SKU (${parsed.qty})`);
+    }
+  }
+
+  // ── Cek keterangan ────────────────────────────────────────────────────────
   if (ketVal) {
     const ketUp = ketVal.toUpperCase();
     const match = keywords.some(w => ketUp.includes(w));
