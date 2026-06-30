@@ -360,18 +360,39 @@ Keterangan: Bonus masker"></textarea>
 <!-- ── BOTTOM NAV (mobile) ── -->
 <nav class="bottom-nav">
   <div class="bottom-nav-inner">
+
     <button class="bnav-item active" id="bnav-dashboard" onclick="switchPage('dashboard')">
-      <span class="bnav-icon">📊</span>
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="13" width="4" height="8" rx="1"/>
+          <rect x="10" y="9" width="4" height="12" rx="1"/>
+          <rect x="17" y="5" width="4" height="16" rx="1"/>
+        </svg>
+      </div>
       <span class="bnav-label">Dashboard</span>
     </button>
+
     <button class="bnav-item" id="bnav-upload" onclick="switchPage('upload')">
-      <span class="bnav-icon">📝</span>
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4"/>
+          <path d="M15 2l5 5-5 5"/>
+          <path d="M20 7H9"/>
+        </svg>
+      </div>
       <span class="bnav-label">Upload</span>
     </button>
+
     <button class="bnav-item" id="bnav-setting" onclick="switchPage('setting')">
-      <span class="bnav-icon">⚙️</span>
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
       <span class="bnav-label">Setting</span>
     </button>
+
   </div>
 </nav>
 
