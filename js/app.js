@@ -477,22 +477,23 @@ async function validateWilayah() {
     }
 
     // Score tiap result vs input (sama seperti BotWA scoring)
+    // SUBDISTRICT_NAME = kelurahan, DISTRICT_NAME = kecamatan
     const scored = list.map(a => {
-      const aKel  = norm(a.DISTRICT_NAME    || '');
-      const aKec  = norm(a.SUBDISTRICT_NAME || '');
+      const aKel  = norm(a.SUBDISTRICT_NAME || '');
+      const aKec  = norm(a.DISTRICT_NAME    || '');
       const aKab  = norm(a.CITY_NAME        || '');
       const aProv = norm(a.PROVINCE_NAME    || '');
       let s = 0;
-      if (kel && aKel.includes(norm(kel)))  s += 4;
-      if (kec && aKec.includes(norm(kec)))  s += 3;
-      if (kab && aKab.includes(norm(kab)))  s += 2;
+      if (kel && aKel.includes(norm(kel)))    s += 4;
+      if (kec && aKec.includes(norm(kec)))    s += 3;
+      if (kab && aKab.includes(norm(kab)))    s += 2;
       if (prov && aProv.includes(norm(prov))) s += 1;
       return { ...a, _score: s };
     }).sort((a, b) => b._score - a._score);
 
     const best = scored[0];
-    const aKel  = norm(best.DISTRICT_NAME    || '');
-    const aKec  = norm(best.SUBDISTRICT_NAME || '');
+    const aKel  = norm(best.SUBDISTRICT_NAME || '');
+    const aKec  = norm(best.DISTRICT_NAME    || '');
     const aKab  = norm(best.CITY_NAME        || '');
     const aProv = norm(best.PROVINCE_NAME    || '');
     const aKpos = best.ZIP_CODE || best.posCode || '';
@@ -502,13 +503,13 @@ async function validateWilayah() {
       if (aKel.includes(norm(kel)) || norm(kel).includes(aKel))
         valSetField('kelurahan', 'ok');
       else
-        valSetField('kelurahan', 'err', `⚠ Mungkin: ${best.DISTRICT_NAME}`);
+        valSetField('kelurahan', 'err', `⚠ Mungkin: ${best.SUBDISTRICT_NAME}`);
     }
     if (kec) {
       if (aKec.includes(norm(kec)) || norm(kec).includes(aKec))
         valSetField('kecamatan', 'ok');
       else
-        valSetField('kecamatan', 'err', `⚠ Mungkin: ${best.SUBDISTRICT_NAME}`);
+        valSetField('kecamatan', 'err', `⚠ Mungkin: ${best.DISTRICT_NAME}`);
     }
     if (kab) {
       if (aKab.includes(norm(kab)) || norm(kab).includes(aKab))
