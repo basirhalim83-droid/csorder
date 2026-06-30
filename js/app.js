@@ -4,19 +4,19 @@ let currentProfile = null;
 let parsedData    = null;   // hasil AI parsing
 let todayOrders   = [];     // orderan hari ini milik CS ini
 
-// ── DATE RANGE PICKER ─────────────────────────────────────────────────────────
-let drpSelStart = null, drpSelEnd = null;
+// ── DATE RANGE PICKER (port dari BotWA analytics) ────────────────────────────
+let drpSelStart = null, drpSelEnd = null, drpPickingEnd = false;
 let drpViewYear = new Date().getFullYear(), drpViewMonth = new Date().getMonth();
 const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const DAYS_ID   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 
-// State filter aktif (default: hari ini)
+// State filter aktif — default hari ini, disimpan sebagai string YYYY-MM-DD (WIB)
 let filterDateStart = todayStr();
 let filterDateEnd   = todayStr();
 
 function drpFmt(d) {
   if (!d) return '—';
-  return new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
 }
 
 function drpToggle() {
@@ -37,42 +37,34 @@ function drpOutside(e) {
   if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) drpClose();
 }
 
-function drpLocalStr(d) {
-  // Konversi Date object ke string YYYY-MM-DD pakai timezone WIB
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-}
-
 function drpPreset(days, label, btn) {
-  const end   = new Date();
-  const start = new Date(Date.now() - (days-1)*864e5);
-  drpSelStart = drpLocalStr(start);
-  drpSelEnd   = drpLocalStr(end);
+  drpSelStart = new Date(Date.now() - (days-1)*864e5); drpSelStart.setHours(0,0,0,0);
+  drpSelEnd   = new Date(); drpSelEnd.setHours(23,59,59,999);
   document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   drpUpdateSel(); drpRender();
 }
 
 function drpPresetThisMonth(btn) {
-  const now = new Date();
-  drpSelStart = drpLocalStr(new Date(now.getFullYear(), now.getMonth(), 1));
-  drpSelEnd   = drpLocalStr(now);
+  drpSelStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  drpSelEnd   = new Date(); drpSelEnd.setHours(23,59,59,999);
   document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   drpUpdateSel(); drpRender();
 }
 
 function drpPresetLastMonth(btn) {
-  const now = new Date();
-  drpSelStart = drpLocalStr(new Date(now.getFullYear(), now.getMonth()-1, 1));
-  drpSelEnd   = drpLocalStr(new Date(now.getFullYear(), now.getMonth(), 0));
+  const n = new Date();
+  drpSelStart = new Date(n.getFullYear(), n.getMonth()-1, 1);
+  drpSelEnd   = new Date(n.getFullYear(), n.getMonth(), 0); drpSelEnd.setHours(23,59,59,999);
   document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   drpUpdateSel(); drpRender();
 }
 
 function drpPresetYesterday(btn) {
-  const y = drpLocalStr(new Date(Date.now() - 864e5));
-  drpSelStart = y; drpSelEnd = y;
+  drpSelStart = new Date(Date.now()-864e5); drpSelStart.setHours(0,0,0,0);
+  drpSelEnd   = new Date(Date.now()-864e5); drpSelEnd.setHours(23,59,59,999);
   document.querySelectorAll('.drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   drpUpdateSel(); drpRender();
@@ -85,78 +77,76 @@ function drpUpdateSel() {
 
 function drpApply() {
   if (!drpSelStart) return;
-  filterDateStart = drpSelStart;
-  filterDateEnd   = drpSelEnd || drpSelStart;
+  const s = drpSelStart;
+  const e = drpSelEnd || drpSelStart;
+  e.setHours(23,59,59,999);
+  // Simpan sebagai YYYY-MM-DD WIB untuk query Supabase
+  filterDateStart = s.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  filterDateEnd   = e.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
   const label = filterDateStart === filterDateEnd
-    ? drpFmt(filterDateStart)
-    : drpFmt(filterDateStart) + ' — ' + drpFmt(filterDateEnd);
+    ? drpFmt(s)
+    : drpFmt(s) + ' — ' + drpFmt(e);
   document.getElementById('drp-label').textContent = label;
   drpClose();
   loadDashboard();
 }
 
 function drpClickDay(y, m, d) {
-  const clicked = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const clicked = new Date(y, m, d);
   if (!drpSelStart || (drpSelStart && drpSelEnd)) {
-    drpSelStart = clicked; drpSelEnd = null;
+    drpSelStart = clicked; drpSelEnd = null; drpPickingEnd = true;
   } else {
     if (clicked < drpSelStart) { drpSelEnd = drpSelStart; drpSelStart = clicked; }
     else drpSelEnd = clicked;
+    drpPickingEnd = false;
   }
   drpUpdateSel(); drpRender();
 }
 
 function drpRender() {
-  const cal = document.getElementById('drp-cal');
-  if (!cal) return;
   const y = drpViewYear, m = drpViewMonth;
   const firstDay    = new Date(y, m, 1).getDay();
   const startPad    = firstDay === 0 ? 6 : firstDay - 1;
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const prevDays    = new Date(y, m, 0).getDate();
-  const todayS      = todayStr();
+  const today       = new Date(); today.setHours(0,0,0,0);
 
-  // Header bulan
-  let html = '<div class="drp-cal-hdr">'
-    + '<button class="drp-nav" onclick="drpNav(-1)">&#8249;</button>'
-    + '<div class="drp-cal-title">' + MONTHS_ID[m] + ' ' + y + '</div>'
-    + '<button class="drp-nav" onclick="drpNav(1)">&#8250;</button>'
-    + '</div>';
+  let html = `<div class="drp-cal-hdr">
+    <button class="drp-nav" onclick="drpNav(-1)">‹</button>
+    <div class="drp-cal-title">${MONTHS_ID[m]} ${y}</div>
+    <button class="drp-nav" onclick="drpNav(1)">›</button>
+  </div>
+  <div class="drp-days-hdr">${DAYS_ID.map(d => '<span>' + d + '</span>').join('')}</div>
+  <div class="drp-days">`;
 
-  // Header hari
-  html += '<div class="drp-days-hdr">';
-  for (var di = 0; di < DAYS_ID.length; di++) {
-    html += '<span>' + DAYS_ID[di] + '</span>';
-  }
-  html += '</div><div class="drp-days">';
-
-  // Hari bulan sebelumnya (padding)
-  for (var i = startPad; i > 0; i--) {
-    html += '<button class="drp-day other-month">' + (prevDays - i + 1) + '</button>';
+  for (let i = startPad; i > 0; i--) {
+    html += `<button class="drp-day other-month" onclick="drpNav(-1)">${prevDays-i+1}</button>`;
   }
 
-  // Hari bulan ini
-  for (var d = 1; d <= daysInMonth; d++) {
-    var mm  = String(m + 1).padStart(2, '0');
-    var dd  = String(d).padStart(2, '0');
-    var cur = y + '-' + mm + '-' + dd;
-    var cls = 'drp-day';
-    if (cur === drpSelStart && cur === drpSelEnd) cls += ' selected';
-    else if (cur === drpSelStart)  cls += ' range-start';
-    else if (cur === drpSelEnd)    cls += ' range-end';
-    else if (drpSelStart && drpSelEnd && cur > drpSelStart && cur < drpSelEnd) cls += ' in-range';
-    if (cur === todayS) cls += ' today';
-    html += '<button class="' + cls + '" onclick="drpClickDay(' + y + ',' + m + ',' + d + ')">' + d + '</button>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cur     = new Date(y, m, d);
+    const isToday = cur.getTime() === today.getTime();
+    const isStart = drpSelStart && cur.getTime() === new Date(drpSelStart.getFullYear(), drpSelStart.getMonth(), drpSelStart.getDate()).getTime();
+    const isEnd   = drpSelEnd   && cur.getTime() === new Date(drpSelEnd.getFullYear(),   drpSelEnd.getMonth(),   drpSelEnd.getDate()).getTime();
+    const inRange = drpSelStart && drpSelEnd && cur > drpSelStart && cur < drpSelEnd;
+
+    let cls = 'drp-day';
+    if (isStart && isEnd) cls += ' selected';
+    else if (isStart)     cls += ' range-start';
+    else if (isEnd)       cls += ' range-end';
+    else if (inRange)     cls += ' in-range';
+    if (isToday) cls += ' today';
+
+    html += `<button class="${cls}" onclick="drpClickDay(${y},${m},${d})">${d}</button>`;
   }
 
-  // Padding akhir
-  var total = startPad + daysInMonth;
-  var rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
-  for (var r = 1; r <= rem; r++) {
-    html += '<button class="drp-day other-month">' + r + '</button>';
+  const total = startPad + daysInMonth;
+  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) {
+    html += `<button class="drp-day other-month" onclick="drpNav(1)">${d}</button>`;
   }
   html += '</div>';
-  cal.innerHTML = html;
+  document.getElementById('drp-cal').innerHTML = html;
 }
 
 function drpNav(dir) {
@@ -166,13 +156,10 @@ function drpNav(dir) {
   drpRender();
 }
 
-// Init picker — script ada di akhir body jadi DOM sudah siap, render langsung
-(function initDrp() {
-  var t = todayStr();
-  drpSelStart = t;
-  drpSelEnd   = t;
-  drpRender();
-  drpUpdateSel();
+// Init — set default hari ini sebagai Date object
+(function() {
+  drpSelStart = new Date(); drpSelStart.setHours(0,0,0,0);
+  drpSelEnd   = new Date(); drpSelEnd.setHours(23,59,59,999);
 })();
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
