@@ -688,6 +688,25 @@ async function doSubmit() {
     return;
   }
 
+  // Cek field merah — warning konfirmasi dulu
+  const errorFields = [
+    { id: 'no',         label: 'No Order' },
+    { id: 'pembayaran', label: 'Pembayaran' },
+    { id: 'kelurahan',  label: 'Kelurahan' },
+    { id: 'kecamatan',  label: 'Kecamatan' },
+    { id: 'kabupaten',  label: 'Kabupaten' },
+    { id: 'provinsi',   label: 'Provinsi' },
+    { id: 'kodepos',    label: 'Kode Pos' },
+    { id: 'rincian',    label: 'Rincian Pembayaran' },
+    { id: 'total',      label: 'Total Pembayaran' },
+  ].filter(f => document.getElementById('f-' + f.id)?.classList.contains('val-err'));
+
+  if (errorFields.length > 0) {
+    const labelList = errorFields.map(f => `• ${f.label}`).join('\n');
+    const lanjut = confirm(`⚠️ Ada ${errorFields.length} field yang tidak valid:\n\n${labelList}\n\nYakin ingin tetap submit?`);
+    if (!lanjut) return;
+  }
+
   const btn     = document.getElementById('btn-submit');
   const loading = document.getElementById('loading-submit');
   btn.disabled  = true;
