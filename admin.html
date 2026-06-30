@@ -290,8 +290,8 @@
     <!-- Import bulk -->
     <div class="card" style="margin-bottom:1rem">
       <div class="card-title">Import Bulk</div>
-      <div class="card-desc">Satu baris = satu SKU. Format: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">NAMA PRODUK | KODE</code></div>
-      <textarea class="f-input" id="sku-bulk" rows="6" placeholder="YOUZHI | YOU&#10;HERBAPIL | HRB&#10;PRIMAGOLD | PRIMA" style="resize:vertical;font-family:monospace;font-size:12px;margin-top:8px"></textarea>
+      <div class="card-desc">Langsung <strong>copy-paste dari spreadsheet</strong> (2 kolom: Nama Produk &amp; Kode). Bisa juga pakai pemisah <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">|</code></div>
+      <textarea class="f-input" id="sku-bulk" rows="6" placeholder="Paste langsung dari spreadsheet..." style="resize:vertical;font-family:monospace;font-size:12px;margin-top:8px"></textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
         <button class="btn-save" onclick="importBulkSku()">Import Semua</button>
         <span id="sku-bulk-status" style="font-size:12px;display:none"></span>
@@ -443,11 +443,13 @@ async function importBulkSku() {
   const rows = raw.split('\n')
     .map(l => l.trim()).filter(Boolean)
     .map(l => {
-      const parts = l.split('|').map(s => s.trim());
+      // Support tab (copy dari spreadsheet) atau pipe |
+      const sep   = l.includes('\t') ? '\t' : '|';
+      const parts = l.split(sep).map(s => s.trim());
       return { nama_produk: parts[0] || '', kode: (parts[1] || '').toUpperCase() };
     }).filter(r => r.kode && r.nama_produk);
 
-  if (!rows.length) { showToast('Format salah. Gunakan: NAMA PRODUK | KODE', 'error'); return; }
+  if (!rows.length) { showToast('Format salah. Pastikan ada 2 kolom: Nama Produk dan Kode', 'error'); return; }
 
   status.style.display = 'inline';
   status.textContent   = `Mengimpor ${rows.length} SKU...`;
