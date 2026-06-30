@@ -194,6 +194,7 @@ function drpNav(dir) {
 
   await loadDashboard();
   await loadHistoryMini();
+  checkAndShowLockBanner();
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -210,7 +211,7 @@ function switchPage(name) {
   const titles = { dashboard:'Dashboard', upload:'Upload Order', setting:'Setting' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') loadDashboard();
-  if (name === 'upload')    loadHistoryMini();
+  if (name === 'upload')    { loadHistoryMini(); checkAndShowLockBanner(); }
   if (name === 'setting')   loadSetting();
 }
 
@@ -830,6 +831,12 @@ async function doSubmit() {
 }
 
 async function doSubmitExec() {
+  // Cek lock jam 08:00–08:59
+  if (checkUploadLock()) {
+    checkAndShowLockBanner();
+    return;
+  }
+
   const form    = getFormValues();
   const btn     = document.getElementById('btn-submit');
   const loading = document.getElementById('loading-submit');
@@ -837,7 +844,7 @@ async function doSubmitExec() {
   loading.classList.add('show');
 
   try {
-    const today   = todayStr();
+    const today   = getOrderDate(); // pakai cutoff logic, bukan todayStr()
     const hpNorm  = normalizeHP(form.hp);           // format 08xxx (untuk orderan_masuk)
     const hpDB    = hpNorm.startsWith('0') ? hpNorm.slice(1) : hpNorm; // format 8xxx (untuk all_orderan)
     const profile  = currentProfile;
@@ -1099,7 +1106,7 @@ function clearPaste() {
 // ── HISTORY MINI (Upload page) ────────────────────────────────────────────────
 async function loadHistoryMini() {
   if (!currentUser) return;
-  const today = todayStr();
+  const today = getOrderDate();
   const { data } = await sb.from('orderan_masuk')
     .select('id, nama, hp, created_at, acc_spv, is_dup_today, is_rts')
     .eq('cs_id', currentUser.id)
@@ -1144,7 +1151,7 @@ async function loadSetting() {
   const { count } = await sb.from('orderan_masuk')
     .select('*', { count:'exact', head:true })
     .eq('cs_id', currentUser.id)
-    .eq('tanggal', todayStr());
+    .eq('tanggal', getOrderDate());
   document.getElementById('info-today').textContent = (count||0) + ' order';
 }
 
@@ -1209,6 +1216,64 @@ function extractEkspedisi(pembayaran) {
 
 function todayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // format YYYY-MM-DD WIB
+}
+
+// ── CUTOFF JAM 08.00 WIB ──────────────────────────────────────────────────────
+// 00:00–07:59 → tanggal = kemarin, bisa upload
+// 08:00–08:59 → LOCKED
+// 09:00+      → tanggal = hari ini, bisa upload
+function getWIBHour() {
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false }), 10);
+}
+
+function getOrderDate() {
+  const hour = getWIBHour();
+  if (hour < 8) {
+    // Sebelum jam 8 → tanggal kemarin
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  }
+  return todayStr();
+}
+
+function checkUploadLock() {
+  const hour = getWIBHour();
+  return hour === 8; // jam 08:00–08:59 = locked
+}
+
+let _lockTimer = null;
+function startLockCountdown() {
+  const banner = document.getElementById('upload-lock-banner');
+  if (!banner) return;
+  clearInterval(_lockTimer);
+  _lockTimer = setInterval(() => {
+    const now  = new Date();
+    const wib  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const hour = wib.getHours();
+    if (hour >= 9) {
+      clearInterval(_lockTimer);
+      banner.style.display = 'none';
+      document.getElementById('btn-submit').disabled = !parsedData;
+      return;
+    }
+    const sisa = 60 - wib.getMinutes();
+    const detik = 60 - wib.getSeconds();
+    const cd = document.getElementById('lock-countdown');
+    if (cd) cd.textContent = `${sisa - 1} menit ${detik < 60 ? detik : 0} detik`;
+  }, 1000);
+}
+
+function checkAndShowLockBanner() {
+  const banner = document.getElementById('upload-lock-banner');
+  if (!banner) return;
+  if (checkUploadLock()) {
+    banner.style.display = 'flex';
+    document.getElementById('btn-submit').disabled = true;
+    startLockCountdown();
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 function showValBanner(type, msg) {
