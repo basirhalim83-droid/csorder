@@ -349,20 +349,22 @@ async function doSubmit() {
     );
     const isRTS = returMatches.length > 0;
 
-    // Kalau ada retur → ambil detail dari all_rts via resi
+    // Ambil detail RTS dari all_rts — cek SEMUA resi dari semua match
+    // (sama persis ValidasiOrder: cek returMatches dulu, kalau kosong cek semua matches)
     let rtsData = [];
-    if (isRTS) {
-      const resiList = returMatches.map(m => m.resi).filter(Boolean);
-      if (resiList.length) {
-        const { data: rtsRows } = await sb.from('all_rts')
-          .select('resi, nama, hp, alasan, tanggal')
-          .in('resi', resiList)
-          .limit(5);
-        rtsData = rtsRows || [];
-      }
-      // Fallback kalau all_rts kosong, pakai data dari all_orderan
-      if (!rtsData.length) rtsData = returMatches;
+    const checkMatches = isRTS ? returMatches : allOrderan;
+    const resiList = checkMatches.map(m => (m.resi||'').trim().toLowerCase()).filter(Boolean);
+    if (resiList.length) {
+      const { data: rtsRows } = await sb.from('all_rts')
+        .select('resi, bulan, reason, status, pihak')
+        .in('resi', resiList)
+        .limit(5);
+      rtsData = rtsRows || [];
     }
+    // Update isRTS: positif jika ada di returMatches ATAU resinya ada di all_rts
+    const isRTSFinal = isRTS || rtsData.length > 0;
+    // Fallback kalau all_rts kosong tapi returMatches ada
+    if (!rtsData.length && isRTS) rtsData = returMatches;
 
     const dupAll = allOrderan.filter(m =>
       !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur')
@@ -372,18 +374,18 @@ async function doSubmit() {
     const valUpdate = {
       is_dup_today: isDupToday,
       is_dup_all  : isDupAll,
-      is_rts      : isRTS,
-      dup_detail  : isDupAll ? allOrderan : null,
-      rts_detail  : isRTS ? rtsData : null,
+      is_rts      : isRTSFinal,
+      dup_detail  : isDupAll    ? allOrderan : null,
+      rts_detail  : isRTSFinal  ? rtsData    : null,
     };
 
     await sb.from('orderan_masuk').update(valUpdate).eq('id', insertedId);
 
     // 4. Kirim WA notifikasi kalau ada masalah
     const masalah = [];
-    if (isDupToday) masalah.push('⚠️ DUPLIKAT HARI INI — HP ini sudah diinput ' + dupToday.length + 'x hari ini');
-    if (isDupAll)   masalah.push('ℹ️ DUPLIKAT ALL TEAM — HP pernah order sebelumnya');
-    if (isRTS)      masalah.push('🔴 PERNAH RTS — customer ini pernah retur barang');
+    if (isDupToday)  masalah.push('⚠️ DUPLIKAT HARI INI — HP ini sudah diinput ' + dupToday.length + 'x hari ini');
+    if (isDupAll)    masalah.push('ℹ️ DUPLIKAT ALL TEAM — HP pernah order sebelumnya');
+    if (isRTSFinal)  masalah.push('🔴 PERNAH RTS — customer ini pernah retur barang');
 
     if (masalah.length > 0 && profile.no_wa) {
       const csName = profile.nama || 'CS';
@@ -416,10 +418,10 @@ async function doSubmit() {
         flagLines.push(`ℹ️ *DUPLIKAT ALL TEAM*\n${detail}`);
       }
 
-      if (isRTS) {
+      if (isRTSFinal) {
         const detail = rtsData.slice(0, 3).map(m => {
-          const alasan = m.alasan || m.reason || '';
-          const tgl    = m.tanggal || m.bulan || '';
+          const alasan = m.reason || '';
+          const tgl    = m.bulan  || m.tanggal || '';
           return `   → ${alasan ? 'Alasan: '+alasan : 'Pernah retur'}${tgl ? ' ('+tgl+')' : ''}`;
         }).join('\n') || '   → Riwayat retur ditemukan';
         flagLines.push(`🔴 *PERNAH RTS*\n${detail}`);
