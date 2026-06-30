@@ -443,6 +443,20 @@ Keterangan: Bonus masker"></textarea>
 </nav>
 
 <div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- Konfirmasi Submit Modal -->
+<div class="confirm-overlay" id="confirm-overlay" style="display:none">
+  <div class="confirm-modal">
+    <div class="confirm-icon">⚠️</div>
+    <div class="confirm-title">Ada data yang tidak valid</div>
+    <div class="confirm-body" id="confirm-body"></div>
+    <div class="confirm-note">Yakin ingin tetap submit?</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn-batal" onclick="confirmSubmitCancel()">Cek Lagi</button>
+      <button class="confirm-btn-ok" onclick="confirmSubmitOk()">Tetap Submit</button>
+    </div>
+  </div>
+</div>
 <script src="js/app.js"></script>
 </body>
 </html>
