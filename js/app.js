@@ -254,8 +254,8 @@ async function loadDashboard() {
     // Label sub sesuai range
     const isSingleDay = filterDateStart === filterDateEnd;
     const subLabel = isSingleDay
-      ? drpFmt(filterDateStart)
-      : `${drpFmt(filterDateStart)} — ${drpFmt(filterDateEnd)}`;
+      ? drpFmt(drpSelStart)
+      : `${drpFmt(drpSelStart)} — ${drpFmt(drpSelEnd)}`;
     document.getElementById('dash-sub').textContent = `Orderan ${subLabel}`;
     document.getElementById('dash-info').textContent = `${total} orderan`;
     document.getElementById('dash-info-mobile').textContent = `${total} orderan`;
