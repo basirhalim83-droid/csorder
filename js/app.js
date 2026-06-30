@@ -389,36 +389,36 @@ async function doSubmit() {
     const isDupToday = dupToday.length > 0;
     const isDupAll   = allOrderan.length > 0;
 
-    // RTS: cek status_akhir mengandung kata 'retur' (sama persis dengan ValidasiOrder)
+    // RTS: sama persis ValidasiOrder doValidasiHarian()
+    // 1. Cek status_akhir → returMatches = order yang pernah retur
     const returMatches = allOrderan.filter(m =>
-      m.status_akhir && m.status_akhir.toLowerCase().includes('retur')
+      (m.status_akhir||'').toLowerCase().includes('retur')
     );
-    const isRTS = returMatches.length > 0;
+    const isRetur = returMatches.length > 0;
 
-    // Ambil detail RTS dari all_rts — cek SEMUA resi dari semua match
-    // (sama persis ValidasiOrder: cek returMatches dulu, kalau kosong cek semua matches)
-    let rtsData = [];
-    const checkMatches = isRTS ? returMatches : allOrderan;
+    // 2. Ambil resi untuk cek detail di all_rts
+    //    Kalau ada retur → cek resi dari returMatches saja
+    //    Kalau tidak ada retur → tetap cek semua resi (jaga-jaga all_rts punya data)
+    const checkMatches = isRetur ? returMatches : allOrderan;
     const resiList = checkMatches.map(m => (m.resi||'').trim().toLowerCase()).filter(Boolean);
+
+    let rtsData = [];
     if (resiList.length) {
       const { data: rtsRows } = await sb.from('all_rts')
         .select('resi, bulan, reason, status, pihak')
         .in('resi', resiList)
-        .limit(5);
+        .limit(10);
       rtsData = rtsRows || [];
     }
-    // Update isRTS: positif jika ada di returMatches ATAU resinya ada di all_rts
-    const isRTSFinal = isRTS || rtsData.length > 0;
-    // Fallback kalau all_rts kosong tapi returMatches ada
-    if (!rtsData.length && isRTS) rtsData = returMatches;
 
-    // Hitung total RTS customer ini — kebijakan: >= 2x RTS wajib Transfer
-    const rtsCount      = returMatches.length; // dari all_orderan (lebih reliable utk counting)
+    // 3. isRTSFinal: positif jika retur di status_akhir ATAU resi ditemukan di all_rts
+    const isRTSFinal = isRetur || rtsData.length > 0;
+    // Fallback: kalau all_rts kosong tapi ada returMatches, pakai returMatches untuk detail
+    if (!rtsData.length && isRetur) rtsData = returMatches;
+
+    // Hitung total RTS dari status_akhir — kebijakan: >= 2x wajib Transfer
+    const rtsCount        = returMatches.length;
     const isWajibTransfer = isRTSFinal && rtsCount >= 2;
-
-    const dupAll = allOrderan.filter(m =>
-      !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur')
-    );
 
     // 3. Update row dengan hasil validasi
     const valUpdate = {
@@ -467,12 +467,9 @@ async function doSubmit() {
       }
 
       if (isDupAll) {
-        const matches = allOrderan
-          .filter(m => !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur'))
-          .slice(0, 3);
-        const detail = matches.length
-          ? matches.map(m => `   → Pernah order${m.tanggal ? ' '+m.tanggal : ''}${m.team ? ' ('+m.team+')' : ''}${m.cs ? ' · CS: '+m.cs : ''}`).join('\n')
-          : '   → Data historis ditemukan';
+        const detail = allOrderan.slice(0, 3)
+          .map(m => `   → Pernah order${m.tanggal ? ' '+m.tanggal : ''}${m.team ? ' ('+m.team+')' : ''}${m.cs ? ' · CS: '+m.cs : ''}`)
+          .join('\n') || '   → Data historis ditemukan';
         flagLines.push(`ℹ️ *DUPLIKAT ALL TEAM*\n${detail}`);
       }
 
