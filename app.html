@@ -30,6 +30,9 @@
     <div class="nav-item" id="nav-upload" onclick="switchPage('upload')">
       <span class="nav-icon">📝</span> Upload Order
     </div>
+    <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
+      <span class="nav-icon">📦</span> Tracking Order
+    </div>
     <div class="nav-section">Akun</div>
     <div class="nav-item" id="nav-setting" onclick="switchPage('setting')">
       <span class="nav-icon">⚙️</span> Setting
@@ -414,6 +417,112 @@ Keterangan: Bonus masker"></textarea>
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════
+       PAGE: TRACKING ORDER
+  ═══════════════════════════════════════ -->
+  <div class="page" id="page-tracking">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Tracking Order</div>
+        <div class="page-sub" style="margin:0">Status pengiriman orderan kamu</div>
+      </div>
+      <!-- Date filter -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="date" id="trk-start" class="trk-date-input">
+        <span style="color:var(--muted);font-size:12px">s/d</span>
+        <input type="date" id="trk-end" class="trk-date-input">
+        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:8px 14px">🔍 Cari</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="sum-grid" style="margin-top:12px;margin-bottom:12px">
+      <div class="sum-card">
+        <div class="s-label">Total Kiriman</div>
+        <div class="s-value s-total" id="trk-total">—</div>
+      </div>
+      <div class="sum-card">
+        <div class="s-label">On Proses</div>
+        <div class="s-value s-tunggu" id="trk-proses">—</div>
+      </div>
+      <div class="sum-card">
+        <div class="s-label">Undell</div>
+        <div class="s-value" style="color:#d97706" id="trk-undell">—</div>
+      </div>
+      <div class="sum-card">
+        <div class="s-label">Delivered</div>
+        <div class="s-value s-kirim" id="trk-delivered">—</div>
+      </div>
+      <div class="sum-card">
+        <div class="s-label">Retur</div>
+        <div class="s-value s-cancel" id="trk-retur">—</div>
+      </div>
+    </div>
+
+    <!-- Alert banners -->
+    <div id="trk-alerts"></div>
+
+    <!-- Filters -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <select id="trk-filter-status" class="trk-select" onchange="applyTrkFilter()">
+        <option value="">Semua Status</option>
+        <option value="proses">On Proses</option>
+        <option value="undell">Undell</option>
+        <option value="delivered">Delivered</option>
+        <option value="retur">Retur</option>
+      </select>
+      <select id="trk-filter-eks" class="trk-select" onchange="applyTrkFilter()">
+        <option value="">Semua Ekspedisi</option>
+        <option value="JNE">JNE</option>
+        <option value="JNT">J&amp;T</option>
+        <option value="SiCepat">SiCepat</option>
+        <option value="Anteraja">Anteraja</option>
+        <option value="Ninja">Ninja</option>
+        <option value="Lion">Lion</option>
+        <option value="TIKI">TIKI</option>
+        <option value="SAP">SAP</option>
+      </select>
+      <input type="text" id="trk-search" class="trk-search" placeholder="🔍 Cari nama / HP / resi..." oninput="applyTrkFilter()">
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Nama</th>
+              <th>No HP</th>
+              <th>No Order</th>
+              <th>Ekspedisi</th>
+              <th>Resi</th>
+              <th>Jumlah</th>
+              <th>Kabupaten</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="trk-tbody">
+            <tr><td colspan="9" class="empty-state">Pilih rentang tanggal lalu klik Cari</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;justify-content:space-between;align-items:center">
+        <span id="trk-info">—</span>
+        <button class="btn-secondary" onclick="loadTracking()" style="font-size:11px;padding:5px 10px">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- Mobile: card view -->
+    <div class="order-cards-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span id="trk-info-mobile" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</span>
+        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
+      </div>
+      <div id="trk-cards"></div>
+    </div>
+  </div>
+
 </div><!-- end main-area -->
 
 <!-- ── BOTTOM NAV (mobile) ── -->
@@ -440,6 +549,18 @@ Keterangan: Bonus masker"></textarea>
         </svg>
       </div>
       <span class="bnav-label">Upload</span>
+    </button>
+
+    <button class="bnav-item" id="bnav-tracking" onclick="switchPage('tracking')">
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <rect x="1" y="3" width="15" height="13" rx="1"/>
+          <path d="M16 8h4l3 3v5h-7V8z"/>
+          <circle cx="5.5" cy="18.5" r="2.5"/>
+          <circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+      </div>
+      <span class="bnav-label">Tracking</span>
     </button>
 
     <button class="bnav-item" id="bnav-setting" onclick="switchPage('setting')">
