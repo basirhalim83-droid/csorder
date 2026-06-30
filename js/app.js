@@ -18,17 +18,19 @@ let todayOrders   = [];     // orderan hari ini milik CS ini
     await sb.from('cs_profiles').upsert(currentProfile);
   }
 
-  // Topbar
+  // Topbar & avatar
   const nama = currentProfile.nama || currentUser.email;
-  document.getElementById('user-nama').textContent    = nama;
-  document.getElementById('user-avatar').textContent  = nama.charAt(0).toUpperCase();
-  document.getElementById('topbar-date').textContent  = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  document.getElementById('user-nama').textContent         = nama;
+  document.getElementById('user-avatar').textContent       = nama.charAt(0).toUpperCase();
+  document.getElementById('mobile-avatar').textContent     = nama.charAt(0).toUpperCase();
+  document.getElementById('topbar-date').textContent       = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
   // Restore theme
   if (localStorage.getItem('cs_theme') === 'dark') {
     document.documentElement.setAttribute('data-theme','dark');
-    document.getElementById('theme-icon').textContent  = '☀️';
-    document.getElementById('theme-label').textContent = 'Terang';
+    document.getElementById('theme-icon').textContent        = '☀️';
+    document.getElementById('theme-label').textContent       = 'Terang';
+    document.getElementById('theme-icon-mobile').textContent = '☀️';
   }
 
   await loadDashboard();
@@ -39,7 +41,12 @@ let todayOrders   = [];     // orderan hari ini milik CS ini
 function switchPage(name) {
   ['dashboard','upload','setting'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
-    document.getElementById('nav-'+p).classList.toggle('active', p===name);
+    // Sidebar nav (desktop)
+    const navEl = document.getElementById('nav-'+p);
+    if (navEl) navEl.classList.toggle('active', p===name);
+    // Bottom nav (mobile)
+    const bnavEl = document.getElementById('bnav-'+p);
+    if (bnavEl) bnavEl.classList.toggle('active', p===name);
   });
   const titles = { dashboard:'Dashboard', upload:'Upload Order', setting:'Setting' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
@@ -53,13 +60,15 @@ function toggleDark() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   if (isDark) {
     document.documentElement.removeAttribute('data-theme');
-    document.getElementById('theme-icon').textContent  = '🌙';
-    document.getElementById('theme-label').textContent = 'Gelap';
+    document.getElementById('theme-icon').textContent        = '🌙';
+    document.getElementById('theme-label').textContent       = 'Gelap';
+    document.getElementById('theme-icon-mobile').textContent = '🌙';
     localStorage.setItem('cs_theme','light');
   } else {
     document.documentElement.setAttribute('data-theme','dark');
-    document.getElementById('theme-icon').textContent  = '☀️';
-    document.getElementById('theme-label').textContent = 'Terang';
+    document.getElementById('theme-icon').textContent        = '☀️';
+    document.getElementById('theme-label').textContent       = 'Terang';
+    document.getElementById('theme-icon-mobile').textContent = '☀️';
     localStorage.setItem('cs_theme','dark');
   }
 }
@@ -90,9 +99,11 @@ async function loadDashboard() {
     document.getElementById('d-hold').textContent   = hold;
     document.getElementById('d-cancel').textContent = cancel;
     document.getElementById('dash-sub').textContent = `Orderan kamu hari ini — ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}`;
-    document.getElementById('dash-info').textContent = `${total} orderan ditemukan`;
+    document.getElementById('dash-info').textContent = `${total} orderan`;
+    document.getElementById('dash-info-mobile').textContent = `${total} orderan hari ini`;
 
     renderDashTable(todayOrders);
+    renderOrderCards(todayOrders);
   } catch(e) {
     showToast('Gagal load dashboard: ' + e.message, 'error');
   }
@@ -140,6 +151,63 @@ function renderDashTable(orders) {
       <td>${accBadge}</td>
       <td style="color:var(--muted);font-size:11px" title="${r.noted||''}">${r.noted||'—'}</td>
     </tr>`;
+  }).join('');
+}
+
+// ── MOBILE: RENDER ORDER CARDS ───────────────────────────────────────────────
+function renderOrderCards(orders) {
+  const wrap = document.getElementById('order-cards');
+  if (!orders.length) {
+    wrap.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:13px">Belum ada orderan hari ini.<br>Yuk mulai input! 💪</div>';
+    return;
+  }
+  wrap.innerHTML = orders.map((r, i) => {
+    const cardClass = r.acc_spv === 'KIRIM'  ? 'oc-kirim'
+      : r.acc_spv === 'HOLD'   ? 'oc-hold'
+      : r.acc_spv === 'CANCEL' ? 'oc-cancel'
+      : r.is_dup_today         ? 'oc-dup'
+      : r.is_rts               ? 'oc-rts' : '';
+
+    const valBadge = r.is_dup_today
+      ? '<span class="badge badge-dup">DUP HARI INI</span>'
+      : r.is_rts
+        ? '<span class="badge badge-rts">PERNAH RTS</span>'
+        : r.is_dup_all
+          ? '<span class="badge badge-dup">DUP ALL</span>'
+          : '<span class="badge badge-ok">AMAN</span>';
+
+    const accBadge = !r.acc_spv
+      ? '<span class="badge badge-pending">Menunggu SPV</span>'
+      : r.acc_spv === 'KIRIM'  ? '<span class="badge badge-kirim">✓ KIRIM</span>'
+      : r.acc_spv === 'HOLD'   ? '<span class="badge badge-hold">⏸ HOLD</span>'
+      : r.acc_spv === 'CANCEL' ? '<span class="badge badge-cancel">✕ CANCEL</span>'
+      : r.acc_spv;
+
+    const waktu = new Date(r.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    const total = r.total_pembayaran ? 'Rp'+Number(r.total_pembayaran).toLocaleString('id-ID') : '—';
+
+    return `<div class="order-card ${cardClass}">
+      <div class="oc-header">
+        <span class="oc-nama">${i+1}. ${r.nama||'—'}</span>
+        <span class="oc-waktu">${waktu}</span>
+      </div>
+      <div class="oc-row">
+        <span class="oc-hp">📱 ${r.hp||'—'}</span>
+        <span style="color:var(--border-strong)">·</span>
+        <span class="oc-jumlah">${r.jumlah_pesanan||'—'}</span>
+      </div>
+      <div class="oc-row" style="margin-top:2px">
+        <span class="oc-total">${total}</span>
+        <span style="color:var(--muted);font-size:12px">${r.pembayaran||''}</span>
+      </div>
+      <div class="oc-footer">
+        <span class="oc-noted">${r.noted ? '📝 '+r.noted : ''}</span>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          ${valBadge}
+          ${accBadge}
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -385,7 +453,7 @@ async function loadSetting() {
   document.getElementById('s-nama').value  = currentProfile.nama  || '';
   document.getElementById('s-wa').value    = currentProfile.no_wa || '';
   document.getElementById('s-email').value = currentProfile.email || currentUser.email || '';
-  document.getElementById('info-uid').textContent  = currentUser.id.slice(0,16) + '...';
+  document.getElementById('info-email').textContent = currentProfile.email || currentUser.email || '—';
   const joined = new Date(currentUser.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
   document.getElementById('info-join').textContent  = joined;
 

@@ -2,7 +2,11 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>CS Input — Adsy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +16,7 @@
 </head>
 <body class="app-body">
 
-<!-- SIDEBAR -->
+<!-- ── SIDEBAR (desktop) ── -->
 <aside class="sidebar">
   <div class="sidebar-logo">
     <div class="logo-mark">CS Input</div>
@@ -47,29 +51,39 @@
   </div>
 </aside>
 
-<!-- MAIN AREA -->
+<!-- ── MAIN AREA ── -->
 <div class="main-area">
 
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-title" id="topbar-title">Dashboard</div>
     <div class="topbar-right">
-      <span id="topbar-date" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+      <span id="topbar-date" class="topbar-date-desktop" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+      <!-- Mobile: avatar + dark toggle -->
+      <div class="mobile-user-btn" onclick="toggleDark()" title="Ganti tema">
+        <span id="theme-icon-mobile">🌙</span>
+      </div>
+      <div class="mobile-user-btn" style="margin-left:4px">
+        <div class="mobile-avatar" id="mobile-avatar">?</div>
+      </div>
     </div>
   </div>
 
-  <!-- ── PAGE: DASHBOARD ── -->
+  <!-- ══════════════════════════════════════
+       PAGE: DASHBOARD
+  ═══════════════════════════════════════ -->
   <div class="page active" id="page-dashboard">
-    <div class="page-title">Dashboard Harian</div>
+    <div class="page-title">Dashboard</div>
     <div class="page-sub" id="dash-sub">Orderan kamu hari ini</div>
 
+    <!-- Summary cards -->
     <div class="sum-grid">
       <div class="sum-card">
-        <div class="s-label">Total Hari Ini</div>
+        <div class="s-label">Total</div>
         <div class="s-value s-total" id="d-total">—</div>
       </div>
       <div class="sum-card">
-        <div class="s-label">Menunggu SPV</div>
+        <div class="s-label">Menunggu</div>
         <div class="s-value s-tunggu" id="d-tunggu">—</div>
       </div>
       <div class="sum-card">
@@ -86,6 +100,7 @@
       </div>
     </div>
 
+    <!-- Desktop: table view -->
     <div class="table-wrap">
       <div class="table-scroll">
         <table>
@@ -113,18 +128,32 @@
         <button class="btn-secondary" onclick="loadDashboard()" style="font-size:11px;padding:5px 10px">🔄 Refresh</button>
       </div>
     </div>
+
+    <!-- Mobile: card view -->
+    <div class="order-cards-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span id="dash-info-mobile" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</span>
+        <button class="btn-secondary" onclick="loadDashboard()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
+      </div>
+      <div class="order-cards" id="order-cards">
+        <div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Memuat data...</div>
+      </div>
+    </div>
   </div>
 
-  <!-- ── PAGE: UPLOAD ORDER ── -->
+  <!-- ══════════════════════════════════════
+       PAGE: UPLOAD ORDER
+  ═══════════════════════════════════════ -->
   <div class="page" id="page-upload">
     <div class="page-title">Upload Order</div>
-    <div class="page-sub">Paste teks orderan → AI akan parsing otomatis → konfirmasi → submit</div>
+    <div class="page-sub">Paste teks orderan → AI parsing → submit</div>
 
     <!-- Step 1: Paste -->
     <div class="card">
       <div class="card-title">1. Paste Teks Orderan</div>
-      <div class="card-desc">Copy dari WA atau sistem lain, paste di sini. AI akan otomatis ekstrak semua field.</div>
-      <textarea class="paste-area" id="paste-input" placeholder="Paste teks orderan di sini...
+      <div class="card-desc">Copy dari WA lalu paste di sini. AI akan otomatis ekstrak semua field.</div>
+      <textarea class="paste-area" id="paste-input"
+        placeholder="Paste teks orderan di sini...
 
 Contoh:
 No 57 JNE - GUDANG KRANGGAN
@@ -138,20 +167,21 @@ JAWA BARAT
 40615
 2 BOTOL NEW HERBAPIL
 COD JNE REG=250000
-Pengirim CS Rama/Adv.Fajar/Triyun|13000|0|5000|0|230000
+Pengirim CS Rama/Adv.Fajar|13000|0|5000|0|230000
 Keterangan: Bonus masker"></textarea>
       <div class="parse-actions">
         <button class="btn-parse" id="btn-parse" onclick="doParse()">✨ Parse dengan AI</button>
         <button class="btn-secondary" onclick="clearPaste()">Bersihkan</button>
-        <span class="loading-txt" id="loading-parse">Memproses AI...</span>
+        <span class="loading-txt" id="loading-parse">AI sedang memproses...</span>
       </div>
     </div>
 
     <!-- Step 2: Preview & Edit -->
     <div class="card preview-card" id="preview-card">
-      <div class="card-title">2. Periksa & Edit Hasil Parsing</div>
-      <div class="card-desc">Pastikan semua data sudah benar sebelum submit. Kamu bisa edit langsung di sini.</div>
+      <div class="card-title">2. Periksa & Edit Hasil</div>
+      <div class="card-desc">Pastikan semua data sudah benar. Kamu bisa edit langsung.</div>
 
+      <!-- Baris 1: No & Nama -->
       <div class="form-grid" style="margin-bottom:10px">
         <div class="f-group">
           <label class="f-label">No Order</label>
@@ -161,16 +191,21 @@ Keterangan: Bonus masker"></textarea>
           <label class="f-label">Nama Customer</label>
           <input class="f-input" id="f-nama" type="text" placeholder="Nama lengkap" />
         </div>
+      </div>
+
+      <!-- Baris 2: HP & Pembayaran -->
+      <div class="form-grid" style="margin-bottom:10px">
         <div class="f-group">
           <label class="f-label">No HP</label>
-          <input class="f-input" id="f-hp" type="text" placeholder="08xxxxxxxxxx" />
+          <input class="f-input" id="f-hp" type="tel" placeholder="08xxxxxxxxxx" />
         </div>
         <div class="f-group">
           <label class="f-label">Pembayaran</label>
-          <input class="f-input" id="f-pembayaran" type="text" placeholder="COD JNE REG / TRANSFER" />
+          <input class="f-input" id="f-pembayaran" type="text" placeholder="COD JNE / TRANSFER" />
         </div>
       </div>
 
+      <!-- Alamat -->
       <div class="form-grid cols-1" style="margin-bottom:10px">
         <div class="f-group">
           <label class="f-label">Alamat</label>
@@ -178,6 +213,7 @@ Keterangan: Bonus masker"></textarea>
         </div>
       </div>
 
+      <!-- Wilayah -->
       <div class="form-grid cols-3" style="margin-bottom:10px">
         <div class="f-group">
           <label class="f-label">Kelurahan</label>
@@ -197,14 +233,15 @@ Keterangan: Bonus masker"></textarea>
         </div>
         <div class="f-group">
           <label class="f-label">Kode Pos</label>
-          <input class="f-input" id="f-kodepos" type="text" />
+          <input class="f-input" id="f-kodepos" type="text" inputmode="numeric" />
         </div>
         <div class="f-group">
-          <label class="f-label">Quantity</label>
-          <input class="f-input" id="f-quantity" type="text" />
+          <label class="f-label">Qty</label>
+          <input class="f-input" id="f-quantity" type="text" inputmode="numeric" />
         </div>
       </div>
 
+      <!-- Detail order -->
       <div class="form-grid" style="margin-bottom:10px">
         <div class="f-group">
           <label class="f-label">Jumlah Pesanan</label>
@@ -212,7 +249,7 @@ Keterangan: Bonus masker"></textarea>
         </div>
         <div class="f-group">
           <label class="f-label">Total Pembayaran</label>
-          <input class="f-input" id="f-total" type="text" placeholder="250000" />
+          <input class="f-input" id="f-total" type="text" inputmode="numeric" placeholder="250000" />
         </div>
         <div class="f-group">
           <label class="f-label">Instruksi Pengiriman</label>
@@ -232,13 +269,13 @@ Keterangan: Bonus masker"></textarea>
         </div>
       </div>
 
-      <!-- Validasi banner -->
+      <!-- Hasil validasi -->
       <div class="val-banner" id="val-banner"></div>
 
       <div class="submit-row">
-        <button class="btn-submit" id="btn-submit" onclick="doSubmit()">✅ Submit Order</button>
-        <button class="btn-secondary" onclick="doParse()">↩ Parse Ulang</button>
-        <span class="loading-txt" id="loading-submit">Menyimpan & memvalidasi...</span>
+        <button class="btn-submit" id="btn-submit" onclick="doSubmit()" disabled>✅ Submit Order</button>
+        <button class="btn-secondary" onclick="clearPaste()">↩ Ulangi</button>
+        <span class="loading-txt" id="loading-submit">Menyimpan & validasi...</span>
       </div>
     </div>
 
@@ -249,30 +286,33 @@ Keterangan: Bonus masker"></textarea>
     </div>
   </div>
 
-  <!-- ── PAGE: SETTING ── -->
+  <!-- ══════════════════════════════════════
+       PAGE: SETTING
+  ═══════════════════════════════════════ -->
   <div class="page" id="page-setting">
     <div class="page-title">Setting</div>
-    <div class="page-sub">Kelola profil dan preferensi akun kamu</div>
+    <div class="page-sub">Kelola profil dan akun kamu</div>
 
     <div class="setting-grid">
       <!-- Profil -->
       <div class="card">
         <div class="card-title">Profil Saya</div>
-        <div class="card-desc">Informasi akun yang digunakan untuk identifikasi orderan</div>
+        <div class="card-desc">Nama dan nomor WA digunakan untuk notifikasi order bermasalah</div>
         <div class="setting-field">
           <label class="setting-label">Nama Lengkap</label>
           <input class="setting-input" id="s-nama" type="text" placeholder="Nama kamu" />
         </div>
         <div class="setting-field">
-          <label class="setting-label">No WhatsApp <span style="color:var(--muted);font-weight:400">(untuk notifikasi order bermasalah)</span></label>
-          <input class="setting-input" id="s-wa" type="tel" placeholder="08xxxxxxxxxx" />
+          <label class="setting-label">No WhatsApp</label>
+          <input class="setting-input" id="s-wa" type="tel" placeholder="08xxxxxxxxxx" inputmode="tel" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Notifikasi otomatis dikirim ke sini saat order terdeteksi masalah</div>
         </div>
         <div class="setting-field">
           <label class="setting-label">Email</label>
           <input class="setting-input" id="s-email" type="email" disabled style="opacity:0.5;cursor:not-allowed" />
         </div>
         <button class="btn-save" onclick="saveProfil()">Simpan Profil</button>
-        <div id="profil-status" style="font-size:12px;margin-top:8px;display:none"></div>
+        <div id="profil-status" style="font-size:12px;margin-top:8px;display:none;padding:6px 10px;border-radius:6px"></div>
       </div>
 
       <!-- Ganti Password -->
@@ -284,38 +324,58 @@ Keterangan: Bonus masker"></textarea>
           <input class="setting-input" id="s-pass" type="password" placeholder="min 6 karakter" />
         </div>
         <div class="setting-field">
-          <label class="setting-label">Konfirmasi Password Baru</label>
+          <label class="setting-label">Konfirmasi Password</label>
           <input class="setting-input" id="s-pass2" type="password" placeholder="ulangi password baru" />
         </div>
         <button class="btn-save" onclick="savePassword()">Ganti Password</button>
-        <div id="pass-status" style="font-size:12px;margin-top:8px;display:none"></div>
+        <div id="pass-status" style="font-size:12px;margin-top:8px;display:none;padding:6px 10px;border-radius:6px"></div>
       </div>
     </div>
 
     <!-- Info Akun -->
-    <div class="card" style="max-width:500px">
+    <div class="card">
       <div class="card-title">Info Akun</div>
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-        <div style="display:flex;justify-content:space-between">
-          <span style="color:var(--muted);font-family:var(--mono);font-size:11px">USER ID</span>
-          <span id="info-uid" style="font-family:var(--mono);font-size:11px">—</span>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Email</span>
+          <span id="info-email" style="font-size:12px;font-family:var(--mono)">—</span>
         </div>
-        <div style="display:flex;justify-content:space-between">
-          <span style="color:var(--muted);font-family:var(--mono);font-size:11px">BERGABUNG</span>
-          <span id="info-join" style="font-family:var(--mono);font-size:11px">—</span>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Bergabung</span>
+          <span id="info-join" style="font-size:12px;font-family:var(--mono)">—</span>
         </div>
-        <div style="display:flex;justify-content:space-between">
-          <span style="color:var(--muted);font-family:var(--mono);font-size:11px">TOTAL ORDER (HARI INI)</span>
-          <span id="info-today" style="font-family:var(--mono);font-size:11px;color:var(--accent)">—</span>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Order hari ini</span>
+          <span id="info-today" style="font-size:13px;font-weight:700;color:var(--accent)">—</span>
         </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+        <button class="btn-secondary" onclick="signOut()" style="color:var(--danger);border-color:var(--danger);width:100%;text-align:center;padding:11px">Keluar / Logout</button>
       </div>
     </div>
   </div>
 
 </div><!-- end main-area -->
 
-<div class="toast-wrap" id="toast-wrap"></div>
+<!-- ── BOTTOM NAV (mobile) ── -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-item active" id="bnav-dashboard" onclick="switchPage('dashboard')">
+      <span class="bnav-icon">📊</span>
+      <span class="bnav-label">Dashboard</span>
+    </button>
+    <button class="bnav-item" id="bnav-upload" onclick="switchPage('upload')">
+      <span class="bnav-icon">📝</span>
+      <span class="bnav-label">Upload</span>
+    </button>
+    <button class="bnav-item" id="bnav-setting" onclick="switchPage('setting')">
+      <span class="bnav-icon">⚙️</span>
+      <span class="bnav-label">Setting</span>
+    </button>
+  </div>
+</nav>
 
+<div class="toast-wrap" id="toast-wrap"></div>
 <script src="js/app.js"></script>
 </body>
 </html>
