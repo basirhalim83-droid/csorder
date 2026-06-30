@@ -563,6 +563,18 @@ function applyKodepos(val) {
   if (el) { el.value = val; valSetField('kodepos', 'ok'); }
 }
 
+// Re-validasi saat CS edit manual — debounce 800ms
+let _valTimer = null;
+function scheduleValidasi() {
+  clearTimeout(_valTimer);
+  _valTimer = setTimeout(() => validateWilayah(), 800);
+}
+
+['f-kelurahan','f-kecamatan','f-kabupaten','f-provinsi','f-kodepos'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', scheduleValidasi);
+});
+
 function getFormValues() {
   return {
     no                  : val('f-no'),
