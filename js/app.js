@@ -233,6 +233,18 @@ function toggleDark() {
   }
 }
 
+// ── HELPER: Render semua badge validasi ──────────────────────────────────────
+function buildValBadges(r) {
+  const badges = [];
+  if (r.is_dup_today)     badges.push('<span class="badge badge-dup">DUP HARI INI</span>');
+  if (r.is_dup_all)       badges.push('<span class="badge badge-dup">DUP ALL</span>');
+  if (r.is_rts)           badges.push('<span class="badge badge-rts">PERNAH RTS</span>');
+  if (r.is_wajib_transfer)badges.push('<span class="badge badge-rts">WAJIB TRANSFER</span>');
+  if (r.is_wilayah_rawan) badges.push('<span class="badge badge-warn">RAWAN</span>');
+  if (!badges.length)     badges.push('<span class="badge badge-ok">AMAN</span>');
+  return badges.join(' ');
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   if (!currentUser) return;
@@ -288,13 +300,7 @@ function renderDashTable(orders) {
       : r.is_dup_today         ? 'row-dup'
       : r.is_rts               ? 'row-rts' : '';
 
-    const valBadge = r.is_dup_today
-      ? '<span class="badge badge-dup">DUP HARI INI</span>'
-      : r.is_rts
-        ? '<span class="badge badge-rts">PERNAH RTS</span>'
-        : r.is_dup_all
-          ? '<span class="badge badge-dup">DUP ALL</span>'
-          : '<span class="badge badge-ok">AMAN</span>';
+    const valBadge = buildValBadges(r);
 
     const accBadge = !r.acc_spv
       ? '<span class="badge badge-pending">Menunggu</span>'
@@ -334,13 +340,7 @@ function renderOrderCards(orders) {
       : r.is_dup_today         ? 'oc-dup'
       : r.is_rts               ? 'oc-rts' : '';
 
-    const valBadge = r.is_dup_today
-      ? '<span class="badge badge-dup">DUP HARI INI</span>'
-      : r.is_rts
-        ? '<span class="badge badge-rts">PERNAH RTS</span>'
-        : r.is_dup_all
-          ? '<span class="badge badge-dup">DUP ALL</span>'
-          : '<span class="badge badge-ok">AMAN</span>';
+    const valBadge = buildValBadges(r);
 
     const accBadge = !r.acc_spv
       ? '<span class="badge badge-pending">Menunggu SPV</span>'
