@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS Input — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/auth.js"></script>
+</head>
+<body class="app-body">
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">CS Input</div>
+    <div class="logo-sub">admin panel</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">Menu</div>
+
+    <div class="nav-item active" id="nav-overview" onclick="switchPage('overview')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+      </span>
+      Overview
+    </div>
+
+    <div class="nav-item" id="nav-users" onclick="switchPage('users')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </span>
+      Users
+    </div>
+
+    <div class="nav-item" id="nav-fonnte" onclick="switchPage('fonnte')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+      </span>
+      Fonnte / WA
+    </div>
+
+    <div class="nav-section" style="margin-top:1.5rem">Navigasi</div>
+    <div class="nav-item" onclick="window.location.href='app.html'">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </span>
+      Kembali ke App
+    </div>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="user-card">
+      <div class="user-avatar" id="user-avatar">A</div>
+      <div class="user-info">
+        <div class="user-name" id="user-nama">Admin</div>
+        <div class="user-role">admin</div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()" title="Keluar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<!-- ── MAIN ── -->
+<div class="main-area">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <span class="topbar-title" id="topbar-title">Overview</span>
+    <div class="topbar-right">
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono)" id="topbar-date"></span>
+      <div class="theme-toggle" onclick="toggleDark()" style="margin-bottom:0">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Gelap</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: OVERVIEW ══ -->
+  <div id="page-overview" class="page active">
+    <div class="page-title">Overview</div>
+    <div class="page-sub">Ringkasan aktivitas tim CS hari ini</div>
+
+    <!-- Stats cards -->
+    <div class="admin-stat-grid">
+      <div class="admin-stat-card">
+        <div class="ast-label">Total CS Terdaftar</div>
+        <div class="ast-value s-total" id="ov-total-cs">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">CS Aktif Hari Ini</div>
+        <div class="ast-value s-kirim" id="ov-aktif">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Total Order Masuk</div>
+        <div class="ast-value s-accent" id="ov-total-order">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Order Flagged</div>
+        <div class="ast-value s-hold" id="ov-flagged">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Pernah RTS</div>
+        <div class="ast-value s-cancel" id="ov-rts">—</div>
+      </div>
+    </div>
+
+    <!-- Per-CS table -->
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700">Ringkasan per CS — <span id="ov-date-label" style="color:var(--muted);font-family:var(--mono)"></span></span>
+        <button class="btn-secondary" onclick="loadOverview()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 360px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nama CS</th>
+              <th>Order</th>
+              <th>Kirim</th>
+              <th>Hold</th>
+              <th>Cancel</th>
+              <th>Menunggu</th>
+              <th>Flagged</th>
+              <th>Terakhir Input</th>
+            </tr>
+          </thead>
+          <tbody id="ov-tbody">
+            <tr><td colspan="9" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: USERS ══ -->
+  <div id="page-users" class="page">
+    <div class="page-title">Users</div>
+    <div class="page-sub">Daftar semua CS yang terdaftar</div>
+
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700" id="users-count-label">— users</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="user-search" class="admin-search" placeholder="Cari nama / email..." oninput="filterUsers()" />
+          <button class="btn-secondary" onclick="loadUsers()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+        </div>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 280px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nama</th>
+              <th>Email</th>
+              <th>No WA</th>
+              <th>Role</th>
+              <th>Order Hari Ini</th>
+              <th>Bergabung</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="8" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: FONNTE ══ -->
+  <div id="page-fonnte" class="page">
+    <div class="page-title">Fonnte / WA Sender</div>
+    <div class="page-sub">Kelola nomor WA pengirim notifikasi</div>
+
+    <!-- Add form -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Tambah Nomor Pengirim</div>
+      <div class="card-desc">Daftarkan nomor WA yang dipakai untuk kirim notifikasi ke CS. Bisa lebih dari satu — yang aktif pertama akan dipakai.</div>
+
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="f-group">
+          <label class="f-label">Label / Nama Nomor</label>
+          <input class="f-input" id="fn-label" placeholder="cth: WA Kantor 1" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Device / Nomor WA Pengirim <span style="color:var(--muted)">(opsional, jika multi-device Fonnte)</span></label>
+          <input class="f-input" id="fn-device" placeholder="cth: 6281234567890 atau kosongkan" />
+        </div>
+      </div>
+      <div class="f-group" style="margin-bottom:12px">
+        <label class="f-label">API Key Fonnte</label>
+        <input class="f-input" id="fn-key" placeholder="Token API dari dashboard Fonnte" type="password" />
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn-save" id="btn-add-fonnte" onclick="addFonnte()">Simpan</button>
+        <span id="fonnte-add-status" style="font-size:12px;display:none"></span>
+      </div>
+    </div>
+
+    <!-- List -->
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700">Nomor Terdaftar</span>
+        <button class="btn-secondary" onclick="loadFonnte()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 480px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Label</th>
+              <th>API Key</th>
+              <th>Device</th>
+              <th>Status</th>
+              <th>Ditambahkan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="fonnte-tbody">
+            <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Info box -->
+    <div style="margin-top:1rem;padding:12px 16px;background:var(--accent-light);border-radius:var(--radius);border:1px solid var(--accent);font-size:12px;color:var(--accent);line-height:1.7">
+      <strong>Cara kerja:</strong> Sistem akan memakai nomor yang <strong>aktif pertama</strong> (urutan terlama ditambahkan).
+      Jika mau rotasi atau ganti nomor, nonaktifkan yang lama dulu lalu aktifkan yang baru.
+      Jika tidak ada yang aktif, sistem pakai <code>FONNTE_KEY</code> dari environment Vercel sebagai fallback.
+    </div>
+  </div>
+
+</div><!-- /main-area -->
+
+<div id="toast-wrap" class="toast-wrap"></div>
+
+<script>
+let currentUser   = null;
+let currentProfile = null;
+let allUsers      = [];       // cache semua users untuk filter
+let todayOrderMap = {};       // { cs_id: [orders] }
+
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  currentUser = await requireAuth();
+  if (!currentUser) return;
+
+  currentProfile = await getProfile(currentUser.id);
+
+  // Proteksi: cuma admin yang boleh masuk
+  if (!currentProfile || currentProfile.role !== 'admin') {
+    window.location.href = 'app.html';
+    return;
+  }
+
+  // Setup header
+  const nama = currentProfile.nama || currentUser.email;
+  document.getElementById('user-nama').textContent   = nama;
+  document.getElementById('user-avatar').textContent = nama.charAt(0).toUpperCase();
+  document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('ov-date-label').textContent = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+
+  // Restore theme
+  if (localStorage.getItem('cs_theme') === 'dark') {
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('theme-icon').textContent  = '☀️';
+    document.getElementById('theme-label').textContent = 'Terang';
+  }
+
+  await loadOverview();
+})();
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function switchPage(name) {
+  ['overview','users','fonnte'].forEach(p => {
+    document.getElementById('page-'+p).classList.toggle('active', p===name);
+    const nav = document.getElementById('nav-'+p);
+    if (nav) nav.classList.toggle('active', p===name);
+  });
+  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender' };
+  document.getElementById('topbar-title').textContent = titles[name] || '';
+  if (name === 'users')  loadUsers();
+  if (name === 'fonnte') loadFonnte();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────────────────
+function toggleDark() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('theme-icon').textContent  = '🌙';
+    document.getElementById('theme-label').textContent = 'Gelap';
+    localStorage.setItem('cs_theme','light');
+  } else {
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('theme-icon').textContent  = '☀️';
+    document.getElementById('theme-label').textContent = 'Terang';
+    localStorage.setItem('cs_theme','dark');
+  }
+}
+
+// ── LOGOUT ────────────────────────────────────────────────────────────────────
+async function doLogout() {
+  await sb.auth.signOut();
+  window.location.href = 'index.html';
+}
+
+// ══ OVERVIEW ══════════════════════════════════════════════════════════════════
+async function loadOverview() {
+  const today = todayStr();
+
+  try {
+    // Fetch parallel: semua users + semua order hari ini
+    const [usersRes, ordersRes] = await Promise.all([
+      sb.from('cs_profiles').select('id, nama, role'),
+      sb.from('orderan_masuk')
+        .select('id, cs_id, cs_nama, acc_spv, is_dup_today, is_dup_all, is_rts, created_at')
+        .eq('tanggal', today)
+        .order('created_at', { ascending: false })
+    ]);
+
+    const users  = usersRes.data  || [];
+    const orders = ordersRes.data || [];
+
+    // Stats
+    const csUsers   = users.filter(u => u.role !== 'admin');
+    const csAktifIds = [...new Set(orders.map(o => o.cs_id))];
+    const flagged   = orders.filter(o => o.is_dup_today || o.is_dup_all || o.is_rts);
+    const rtsOrders = orders.filter(o => o.is_rts);
+
+    document.getElementById('ov-total-cs').textContent    = csUsers.length;
+    document.getElementById('ov-aktif').textContent       = csAktifIds.length;
+    document.getElementById('ov-total-order').textContent = orders.length;
+    document.getElementById('ov-flagged').textContent     = flagged.length;
+    document.getElementById('ov-rts').textContent         = rtsOrders.length;
+
+    // Group orders by cs_id
+    const byCs = {};
+    orders.forEach(o => {
+      if (!byCs[o.cs_id]) byCs[o.cs_id] = { nama: o.cs_nama || '—', orders: [] };
+      byCs[o.cs_id].orders.push(o);
+    });
+
+    // Render table
+    const tbody = document.getElementById('ov-tbody');
+    if (!Object.keys(byCs).length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Belum ada order masuk hari ini.</td></tr>';
+      return;
+    }
+
+    let rows = Object.entries(byCs)
+      .map(([csId, d]) => {
+        const ords    = d.orders;
+        const kirim   = ords.filter(o => o.acc_spv === 'KIRIM').length;
+        const hold    = ords.filter(o => o.acc_spv === 'HOLD').length;
+        const cancel  = ords.filter(o => o.acc_spv === 'CANCEL').length;
+        const tunggu  = ords.filter(o => !o.acc_spv).length;
+        const flag    = ords.filter(o => o.is_dup_today || o.is_dup_all || o.is_rts).length;
+        const last    = new Date(ords[0].created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+        return { csId, nama: d.nama, total: ords.length, kirim, hold, cancel, tunggu, flag, last };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
+        <td style="font-weight:600">${r.nama}</td>
+        <td style="font-family:var(--mono);font-weight:700;color:var(--accent)">${r.total}</td>
+        <td style="color:var(--success)">${r.kirim || '—'}</td>
+        <td style="color:var(--warn)">${r.hold || '—'}</td>
+        <td style="color:var(--danger)">${r.cancel || '—'}</td>
+        <td style="color:var(--muted)">${r.tunggu || '—'}</td>
+        <td>${r.flag > 0 ? `<span class="badge badge-hold">${r.flag} flagged</span>` : '<span class="badge badge-ok">Aman</span>'}</td>
+        <td style="color:var(--muted);font-family:var(--mono)">${r.last}</td>
+      </tr>
+    `).join('');
+
+  } catch(e) {
+    showToast('Gagal load overview: ' + e.message, 'error');
+  }
+}
+
+// ══ USERS ════════════════════════════════════════════════════════════════════
+async function loadUsers() {
+  const today = todayStr();
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Memuat...</td></tr>';
+
+  try {
+    const [usersRes, ordersRes] = await Promise.all([
+      sb.from('cs_profiles').select('*').order('created_at', { ascending: true }),
+      sb.from('orderan_masuk').select('cs_id').eq('tanggal', today)
+    ]);
+
+    allUsers = usersRes.data || [];
+    const orders = ordersRes.data || [];
+
+    // Count orders per cs
+    const countMap = {};
+    orders.forEach(o => { countMap[o.cs_id] = (countMap[o.cs_id] || 0) + 1; });
+
+    document.getElementById('users-count-label').textContent = `${allUsers.length} users terdaftar`;
+
+    renderUsersTable(allUsers, countMap);
+
+  } catch(e) {
+    showToast('Gagal load users: ' + e.message, 'error');
+  }
+}
+
+function renderUsersTable(users, countMap) {
+  const today  = todayStr();
+  const tbody  = document.getElementById('users-tbody');
+
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada user.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = users.map((u, i) => {
+    const isAdmin  = u.role === 'admin';
+    const orderCnt = countMap ? (countMap[u.id] || 0) : '—';
+    const joined   = u.created_at
+      ? new Date(u.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
+      : '—';
+
+    const roleBadge = isAdmin
+      ? '<span class="badge-role admin">Admin</span>'
+      : '<span class="badge-role cs">CS</span>';
+
+    const roleBtn = isAdmin
+      ? `<button class="btn-sm btn-sm-warn" onclick="toggleRole('${u.id}','admin')">Jadikan CS</button>`
+      : `<button class="btn-sm btn-sm-accent" onclick="toggleRole('${u.id}','cs')">Jadikan Admin</button>`;
+
+    return `<tr>
+      <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${(u.nama||'?').charAt(0).toUpperCase()}</div>
+          <span style="font-weight:600">${u.nama||'—'}</span>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${u.email||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px">${u.no_wa||'—'}</td>
+      <td>${roleBadge}</td>
+      <td style="font-weight:600;color:var(--accent);font-family:var(--mono)">${orderCnt}</td>
+      <td style="color:var(--muted);font-size:12px">${joined}</td>
+      <td>${roleBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterUsers() {
+  const q = document.getElementById('user-search').value.toLowerCase();
+  const filtered = q
+    ? allUsers.filter(u =>
+        (u.nama||'').toLowerCase().includes(q) ||
+        (u.email||'').toLowerCase().includes(q) ||
+        (u.no_wa||'').includes(q)
+      )
+    : allUsers;
+  renderUsersTable(filtered, null);
+}
+
+async function toggleRole(userId, currentRole) {
+  const newRole = currentRole === 'admin' ? 'cs' : 'admin';
+  const label   = newRole === 'admin' ? 'Admin' : 'CS biasa';
+  if (!confirm(`Ubah role user ini menjadi ${label}?`)) return;
+
+  try {
+    const { error } = await sb.from('cs_profiles')
+      .update({ role: newRole })
+      .eq('id', userId);
+    if (error) throw error;
+    showToast(`Role berhasil diubah ke ${label}`, 'success');
+    await loadUsers();
+  } catch(e) {
+    showToast('Gagal ubah role: ' + e.message, 'error');
+  }
+}
+
+// ══ FONNTE ════════════════════════════════════════════════════════════════════
+async function loadFonnte() {
+  const tbody = document.getElementById('fonnte-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Memuat...</td></tr>';
+
+  try {
+    const { data, error } = await sb.from('fonnte_config')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    const list = data || [];
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Belum ada nomor terdaftar. Tambah di atas.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map((r, i) => {
+      const keyMask = r.api_key
+        ? r.api_key.slice(0,6) + '••••••••' + r.api_key.slice(-4)
+        : '—';
+      const added = new Date(r.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+      const statusBadge = r.is_active
+        ? '<span class="badge badge-ok">Aktif</span>'
+        : '<span class="badge badge-pending">Nonaktif</span>';
+      const toggleLabel = r.is_active ? 'Nonaktifkan' : 'Aktifkan';
+      const toggleClass = r.is_active ? 'btn-sm-warn' : 'btn-sm-accent';
+
+      return `<tr>
+        <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
+        <td style="font-weight:600">${r.label||'—'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${keyMask}</td>
+        <td style="font-family:var(--mono);font-size:12px">${r.device||'—'}</td>
+        <td>${statusBadge}</td>
+        <td style="color:var(--muted);font-size:12px">${added}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm ${toggleClass}" onclick="toggleFonnte('${r.id}',${r.is_active})">${toggleLabel}</button>
+          <button class="btn-sm btn-sm-danger" onclick="deleteFonnte('${r.id}','${(r.label||'').replace(/'/g,'')}')" >Hapus</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    showToast('Gagal load fonnte: ' + e.message, 'error');
+  }
+}
+
+async function addFonnte() {
+  const label  = document.getElementById('fn-label').value.trim();
+  const key    = document.getElementById('fn-key').value.trim();
+  const device = document.getElementById('fn-device').value.trim();
+  const status = document.getElementById('fonnte-add-status');
+  const btn    = document.getElementById('btn-add-fonnte');
+
+  if (!label) { showInlineStatus(status, 'Label wajib diisi.', 'error'); return; }
+  if (!key)   { showInlineStatus(status, 'API Key wajib diisi.', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+
+  try {
+    const { error } = await sb.from('fonnte_config').insert({
+      label,
+      api_key   : key,
+      device    : device || null,
+      is_active : true
+    });
+    if (error) throw error;
+
+    document.getElementById('fn-label').value  = '';
+    document.getElementById('fn-key').value    = '';
+    document.getElementById('fn-device').value = '';
+    showInlineStatus(status, '✓ Berhasil ditambahkan.', 'success');
+    showToast('Nomor Fonnte disimpan!', 'success');
+    await loadFonnte();
+  } catch(e) {
+    showInlineStatus(status, '✗ Gagal: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Simpan';
+  }
+}
+
+async function toggleFonnte(id, currentActive) {
+  try {
+    const { error } = await sb.from('fonnte_config')
+      .update({ is_active: !currentActive, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+    showToast(currentActive ? 'Nomor dinonaktifkan.' : 'Nomor diaktifkan!', 'success');
+    await loadFonnte();
+  } catch(e) {
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+async function deleteFonnte(id, label) {
+  if (!confirm(`Hapus nomor "${label}"? Data ini tidak bisa dikembalikan.`)) return;
+  try {
+    const { error } = await sb.from('fonnte_config').delete().eq('id', id);
+    if (error) throw error;
+    showToast('Nomor dihapus.', 'success');
+    await loadFonnte();
+  } catch(e) {
+    showToast('Gagal hapus: ' + e.message, 'error');
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function showInlineStatus(el, msg, type) {
+  el.textContent = msg;
+  el.style.display = 'inline';
+  el.style.color = type === 'success' ? 'var(--success)' : 'var(--danger)';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function showToast(msg, type = 'info') {
+  let wrap = document.getElementById('toast-wrap');
+  const t  = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+</script>
+</body>
+</html>
