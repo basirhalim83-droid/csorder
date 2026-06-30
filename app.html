@@ -73,8 +73,45 @@
        PAGE: DASHBOARD
   ═══════════════════════════════════════ -->
   <div class="page active" id="page-dashboard">
-    <div class="page-title">Dashboard</div>
-    <div class="page-sub" id="dash-sub">Orderan kamu hari ini</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Dashboard</div>
+        <div class="page-sub" id="dash-sub" style="margin:0">Orderan kamu hari ini</div>
+      </div>
+      <!-- Date Range Picker -->
+      <div style="position:relative" id="drp-wrap">
+        <button class="drp-trigger" onclick="drpToggle()" id="drp-trigger">
+          <span>📅</span>
+          <span id="drp-label">Hari Ini</span>
+          <span style="color:var(--muted)">▾</span>
+        </button>
+        <div class="drp-dropdown" id="drp-dropdown">
+          <div class="drp-presets">
+            <button class="drp-preset active" onclick="drpPreset(1,'Hari Ini',this)">Hari Ini</button>
+            <button class="drp-preset" onclick="drpPresetYesterday(this)">Kemarin</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="drp-preset" onclick="drpPreset(7,'7 Hari Terakhir',this)">7 Hari Terakhir</button>
+            <button class="drp-preset" onclick="drpPreset(14,'14 Hari Terakhir',this)">14 Hari Terakhir</button>
+            <button class="drp-preset" onclick="drpPreset(30,'30 Hari Terakhir',this)">30 Hari Terakhir</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="drp-preset" onclick="drpPresetThisMonth(this)">Bulan Ini</button>
+            <button class="drp-preset" onclick="drpPresetLastMonth(this)">Bulan Lalu</button>
+          </div>
+          <div style="display:flex;flex-direction:column;flex:1">
+            <div class="drp-cal" id="drp-cal"></div>
+            <div class="drp-footer">
+              <div class="drp-sel-txt">
+                <span id="drp-sel-start">—</span> → <span id="drp-sel-end">—</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="drp-cancel" onclick="drpClose()">Batal</button>
+                <button class="drp-apply" onclick="drpApply()">Terapkan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Summary cards -->
     <div class="sum-grid">
