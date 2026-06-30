@@ -372,3 +372,16 @@ tr.row-rts{background:var(--warn-light)!important}
 .drp-cancel{padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;cursor:pointer}
 .drp-cancel:hover{border-color:#ef4444;color:#ef4444}
 @media(max-width:600px){.drp-dropdown{min-width:calc(100vw - 32px);right:-16px}.drp-presets{width:120px}}
+
+/* ── VALIDASI WILAYAH ──────────────────────────────────────────────────────── */
+.f-input.val-ok   { border-color:#22c55e !important; }
+.f-input.val-err  { border-color:#ef4444 !important; background:rgba(239,68,68,.04); }
+.f-input.val-warn { border-color:#f59e0b !important; background:rgba(245,158,11,.04); }
+.val-hint { font-size:11px; margin-top:3px; min-height:14px; line-height:1.3; }
+.val-hint.err  { color:#ef4444; }
+.val-hint.warn { color:#f59e0b; }
+.val-hint.ok   { color:#22c55e; }
+.val-hint .hint-apply {
+  margin-left:4px; font-size:11px; font-weight:600; color:var(--accent);
+  background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;
+}
