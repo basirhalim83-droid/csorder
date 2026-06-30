@@ -404,6 +404,7 @@ async function doParse() {
     showToast('Parsing berhasil! Periksa hasilnya.', 'success');
     validateWilayah();
     validateEkspedisi();
+    validateRincian();
 
     // Scroll ke preview
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -597,6 +598,43 @@ function validateEkspedisi() {
   }
 }
 
+// ── VALIDASI RINCIAN vs TOTAL ─────────────────────────────────────────────────
+function validateRincian() {
+  const rincianVal = (document.getElementById('f-rincian')?.value || '').trim();
+  const totalVal   = (document.getElementById('f-total')?.value   || '').trim();
+
+  ['rincian','total'].forEach(id => {
+    const el   = document.getElementById('f-' + id);
+    const hint = document.getElementById('hint-' + id);
+    if (el)   el.classList.remove('val-ok','val-err','val-warn');
+    if (hint) { hint.className = 'val-hint'; hint.innerHTML = ''; }
+  });
+
+  if (!rincianVal || !totalVal) return;
+
+  const parts = rincianVal.split('|').map(s => parseInt(s.trim(), 10));
+  if (parts.length !== 5 || parts.some(isNaN)) {
+    valSetField('rincian', 'err', '⚠ Format harus: ongkir|pot.ongkir|admin|pot.admin|harga');
+    return;
+  }
+
+  const [ongkir, potOngkir, admin, potAdmin, harga] = parts;
+  const totalHitung = harga + ongkir - potOngkir + admin - potAdmin;
+  const totalInput  = parseInt(totalVal.replace(/\D/g, ''), 10);
+
+  const fmt = n => n.toLocaleString('id-ID');
+
+  if (totalHitung === totalInput) {
+    valSetField('rincian', 'ok', `✓ ${fmt(harga)} + ${fmt(ongkir-potOngkir)} ongkir + ${fmt(admin-potAdmin)} admin = ${fmt(totalHitung)}`);
+    valSetField('total',   'ok');
+  } else {
+    valSetField('rincian', 'err',
+      `⚠ Hasil hitung: ${fmt(totalHitung)} (harga ${fmt(harga)} + ongkir ${fmt(ongkir-potOngkir)} + admin ${fmt(admin-potAdmin)})`
+    );
+    valSetField('total', 'err', `⚠ Tidak cocok dengan rincian. Seharusnya: ${fmt(totalHitung)}`);
+  }
+}
+
 // Re-validasi saat CS edit manual — debounce 800ms
 let _valTimer = null;
 function scheduleValidasi() {
@@ -611,6 +649,10 @@ function scheduleValidasi() {
 ['f-no','f-pembayaran'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', validateEkspedisi);
+});
+['f-rincian','f-total'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', validateRincian);
 });
 
 function getFormValues() {
