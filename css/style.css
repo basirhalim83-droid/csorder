@@ -304,3 +304,36 @@ tr.row-rts{background:var(--warn-light)!important}
   .toast-wrap{ bottom:1.5rem; right:1.5rem }
   .page{ padding-bottom:1.5rem }
 }
+
+/* ═══════════════════════════════════════════════════
+   ADMIN PANEL
+═══════════════════════════════════════════════════ */
+.s-accent{ color:var(--accent) }
+
+/* Admin stat grid */
+.admin-stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1.25rem}
+.admin-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;box-shadow:var(--shadow)}
+.ast-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;font-family:var(--mono);margin-bottom:6px}
+.ast-value{font-size:28px;font-weight:700;line-height:1}
+
+/* Role badges */
+.badge-role{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10px;font-family:var(--mono);font-weight:700}
+.badge-role.admin{background:var(--accent-light);color:var(--accent)}
+.badge-role.cs{background:var(--bg);color:var(--muted);border:1px solid var(--border-strong)}
+
+/* Small action buttons */
+.btn-sm{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);transition:opacity 0.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.btn-sm:hover{opacity:0.8}
+.btn-sm-accent{background:var(--accent-light);color:var(--accent)}
+.btn-sm-warn{background:var(--warn-light);color:var(--warn)}
+.btn-sm-danger{background:var(--danger-light);color:var(--danger)}
+
+/* Admin search input */
+.admin-search{padding:7px 12px;border:1.5px solid var(--border-strong);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;transition:border-color 0.15s;width:220px}
+.admin-search:focus{border-color:var(--accent)}
+
+@media(max-width:768px){
+  .admin-stat-grid{grid-template-columns:repeat(2,1fr)}
+  .admin-stat-grid .admin-stat-card:first-child{grid-column:1/-1}
+  .admin-search{width:100%}
+}
