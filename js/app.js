@@ -1356,16 +1356,19 @@ async function loadTracking() {
       return;
     }
 
-    // 2. Kumpulkan HP unik, convert ke format 8xxx (all_orderan)
-    const hpSet = new Set();
+    // 2. Kumpulkan pasangan HP+tanggal dari orderan_masuk
+    // Map: hp_normalized → set of tanggal
+    const hpTanggalMap = {};
     masukList.forEach(r => {
       let hp = (r.hp || '').replace(/\D/g, '');
       if (hp.startsWith('62')) hp = hp.slice(2);
       if (hp.startsWith('0'))  hp = hp.slice(1);
-      if (hp) hpSet.add(hp);
+      if (!hp) return;
+      if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
+      if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
     });
 
-    const hpList = Array.from(hpSet);
+    const hpList = Object.keys(hpTanggalMap);
     if (!hpList.length) {
       trkAllData = [];
       updateTrkCards([]);
@@ -1373,16 +1376,26 @@ async function loadTracking() {
       return;
     }
 
-    // 3. Query all_orderan by HP list
+    // 3. Query all_orderan by HP list + tanggal range yang sama
+    //    Supaya tidak ikut ambil orderan lama dari customer yang sama
     const { data: allData, error: allErr } = await sb.from('all_orderan')
       .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
       .in('hp', hpList)
+      .gte('tanggal', trkStart)
+      .lte('tanggal', trkEnd)
       .order('tanggal', { ascending: false })
       .limit(500);
 
     if (allErr) throw allErr;
 
-    trkAllData = allData || [];
+    // 4. Filter lagi: hanya baris yang tanggal-nya cocok dengan tanggal order CS
+    //    (antisipasi kalau ada HP sama yang kebetulan pesan di hari berbeda dalam range)
+    const filtered = (allData || []).filter(r => {
+      const tgl = (r.tanggal || '').slice(0, 10);
+      return hpTanggalMap[r.hp]?.has(tgl);
+    });
+
+    trkAllData = filtered;
 
     updateTrkCards(trkAllData);
     showTrkAlerts(trkAllData);
