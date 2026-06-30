@@ -1,5 +1,6 @@
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const q = (req.query.q || '').trim();
@@ -12,9 +13,7 @@ module.exports = async function handler(req, res) {
     );
     const json = await r.json();
     const list = json?.data || (Array.isArray(json) ? json : []);
-    const item = list[0] || {};
-    const kodepos = item.ZIP_CODE || item.posCode || '';
-    return res.status(200).json({ kodepos });
+    return res.status(200).json({ ok: true, data: list });
   } catch(e) {
     return res.status(500).json({ error: e.message });
   }
