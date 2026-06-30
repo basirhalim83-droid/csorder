@@ -319,8 +319,10 @@ async function doSubmit() {
 
     const insertedId = inserted.id;
 
-    // 2. Validasi — dupToday & allOrderan parallel
-    const [dupTodayRes, allOrderanRes] = await Promise.all([
+    // 2. Validasi — semua query parallel
+    const kodepos = String(form.kodepos || '').trim().replace(/\.0$/, '');
+
+    const [dupTodayRes, allOrderanRes, kpStatsRes, eksRes] = await Promise.all([
       // Cek dup hari ini (HP sama, hari sama, bukan row ini sendiri)
       hpNorm ? sb.from('orderan_masuk')
         .select('id, nama, cs_nama, created_at')
@@ -330,15 +332,59 @@ async function doSubmit() {
         .limit(5) : Promise.resolve({ data: [] }),
 
       // Cek dup all team + ambil status_akhir & resi untuk deteksi RTS
-      // all_orderan simpan HP format 8xxx (tanpa leading 0) → pakai hpDB
       hpDB ? sb.from('all_orderan')
         .select('nama, hp, tanggal, cs, team, status_akhir, resi')
         .eq('hp', hpDB)
         .limit(10) : Promise.resolve({ data: [] }),
+
+      // Cek wilayah rawan dari kodepos_stats
+      kodepos ? sb.from('kodepos_stats')
+        .select('kodepos, total, retur, pct')
+        .eq('kodepos', kodepos)
+        .single() : Promise.resolve({ data: null }),
+
+      // Cek rekomendasi ekspedisi dari ekspedisi_rekomendasi
+      kodepos ? sb.from('ekspedisi_rekomendasi')
+        .select('kodepos, jne_del, jnt_del, ninja_del, lion_del')
+        .eq('kodepos', kodepos)
+        .single() : Promise.resolve({ data: null }),
     ]);
 
     const dupToday   = dupTodayRes.data   || [];
     const allOrderan = allOrderanRes.data || [];
+    const kpStat     = kpStatsRes.data    || null;
+    const eksData    = eksRes.data        || null;
+
+    // Rekomendasi ekspedisi — sama persis logika ValidasiOrder
+    const usedEks = extractEkspedisi(form.pembayaran || '');
+    let rekEkspedisi = '';
+    let eksColor = 'none'; // 'green' | 'yellow' | 'red' | 'none'
+    if (eksData) {
+      const candidates = [
+        { name: 'JNE',   del: eksData.jne_del   || 0 },
+        { name: 'JNT',   del: eksData.jnt_del   || 0 },
+        { name: 'Ninja', del: eksData.ninja_del || 0 },
+        { name: 'Lion',  del: eksData.lion_del  || 0 },
+      ].filter(e => e.del > 0).sort((a, b) => b.del - a.del);
+      if (candidates.length) {
+        rekEkspedisi = candidates.slice(0, 3).map(e => e.name + '(' + Math.round(e.del) + '%)').join(' > ');
+        if (usedEks) {
+          const rekList  = candidates.map(e => e.name.toLowerCase());
+          const topRek   = candidates[0].name.toLowerCase();
+          if (!rekList.includes(usedEks.toLowerCase()))          eksColor = 'red';
+          else if (topRek !== usedEks.toLowerCase())             eksColor = 'yellow';
+          else                                                    eksColor = 'green';
+        }
+      }
+    }
+    const isEkspedisiWrong = eksColor === 'red' || eksColor === 'yellow';
+
+    // Wilayah rawan: sama persis ValidasiOrder
+    // pct >= 30 → RAWAN TINGGI, pct >= 15 → PERLU DIPERHATIKAN, pct < 15 → aman
+    // Flag notif hanya kalau >= 15 (sama dengan filter dashboard ValidasiOrder)
+    const kpPct          = kpStat ? (kpStat.pct || Math.round((kpStat.retur / kpStat.total) * 100)) : 0;
+    const kpStatus       = kpPct >= 30 ? 'RAWAN TINGGI' : kpPct >= 15 ? 'PERLU DIPERHATIKAN' : 'RELATIF AMAN';
+    const isWilayahRawan = kpStat && kpStat.total >= 5 && kpPct >= 15;
 
     const isDupToday = dupToday.length > 0;
     const isDupAll   = allOrderan.length > 0;
@@ -366,26 +412,38 @@ async function doSubmit() {
     // Fallback kalau all_rts kosong tapi returMatches ada
     if (!rtsData.length && isRTS) rtsData = returMatches;
 
+    // Hitung total RTS customer ini — kebijakan: >= 2x RTS wajib Transfer
+    const rtsCount      = returMatches.length; // dari all_orderan (lebih reliable utk counting)
+    const isWajibTransfer = isRTSFinal && rtsCount >= 2;
+
     const dupAll = allOrderan.filter(m =>
       !m.status_akhir || !m.status_akhir.toLowerCase().includes('retur')
     );
 
     // 3. Update row dengan hasil validasi
     const valUpdate = {
-      is_dup_today: isDupToday,
-      is_dup_all  : isDupAll,
-      is_rts      : isRTSFinal,
-      dup_detail  : isDupAll    ? allOrderan : null,
-      rts_detail  : isRTSFinal  ? rtsData    : null,
+      is_dup_today      : isDupToday,
+      is_dup_all        : isDupAll,
+      is_rts            : isRTSFinal,
+      is_wajib_transfer : isWajibTransfer  || false,
+      is_wilayah_rawan  : isWilayahRawan   || false,
+      is_eks_wrong      : isEkspedisiWrong || false,
+      dup_detail        : isDupAll         ? allOrderan : null,
+      rts_detail        : isRTSFinal       ? rtsData    : null,
+      kp_stat           : kpStat           ? { total: kpStat.total, retur: kpStat.retur, pct: kpStat.pct } : null,
+      eks_detail        : rekEkspedisi     ? { dipakai: usedEks, rekomendasi: rekEkspedisi, status: eksColor } : null,
     };
 
     await sb.from('orderan_masuk').update(valUpdate).eq('id', insertedId);
 
     // 4. Kirim WA notifikasi kalau ada masalah
     const masalah = [];
-    if (isDupToday)  masalah.push('⚠️ DUPLIKAT HARI INI — HP ini sudah diinput ' + dupToday.length + 'x hari ini');
-    if (isDupAll)    masalah.push('ℹ️ DUPLIKAT ALL TEAM — HP pernah order sebelumnya');
-    if (isRTSFinal)  masalah.push('🔴 PERNAH RTS — customer ini pernah retur barang');
+    if (isDupToday)        masalah.push('⚠️ DUPLIKAT HARI INI — HP ini sudah diinput ' + dupToday.length + 'x hari ini');
+    if (isDupAll)          masalah.push('ℹ️ DUPLIKAT ALL TEAM — HP pernah order sebelumnya');
+    if (isRTSFinal)        masalah.push('🔴 PERNAH RTS — customer ini pernah retur barang (' + rtsCount + 'x)');
+    if (isWajibTransfer)   masalah.push('🚫 WAJIB TRANSFER — customer sudah RTS ' + rtsCount + 'x, tidak boleh COD');
+    if (isWilayahRawan)    masalah.push('📍 WILAYAH ' + kpStatus + ' — ' + kpPct + '% RTS (' + kpStat.retur + '/' + kpStat.total + ' order historis)');
+    if (isEkspedisiWrong)  masalah.push('🚚 EKSPEDISI ' + (eksColor === 'red' ? 'TIDAK DIREKOMENDASIKAN' : 'BUKAN TERBAIK') + ' — rekomendasi: ' + rekEkspedisi);
 
     if (masalah.length > 0 && profile.no_wa) {
       const csName = profile.nama || 'CS';
@@ -424,7 +482,31 @@ async function doSubmit() {
           const tgl    = m.bulan  || m.tanggal || '';
           return `   → ${alasan ? 'Alasan: '+alasan : 'Pernah retur'}${tgl ? ' ('+tgl+')' : ''}`;
         }).join('\n') || '   → Riwayat retur ditemukan';
-        flagLines.push(`🔴 *PERNAH RTS*\n${detail}`);
+        flagLines.push(`🔴 *PERNAH RTS* (${rtsCount}x)\n${detail}`);
+      }
+
+      if (isWajibTransfer) {
+        flagLines.push(
+          `🚫 *WAJIB TRANSFER*\n` +
+          `   → Customer ini sudah RTS ${rtsCount}x\n` +
+          `   → Tidak boleh diproses COD, harus Transfer terlebih dahulu`
+        );
+      }
+
+      if (isWilayahRawan) {
+        flagLines.push(
+          `📍 *WILAYAH ${kpStatus}*\n` +
+          `   → Kode Pos ${kodepos}: ${kpPct}% RTS (${kpStat.retur}/${kpStat.total} order historis)`
+        );
+      }
+
+      if (isEkspedisiWrong) {
+        const eksLabel = eksColor === 'red' ? 'TIDAK DIREKOMENDASIKAN' : 'BUKAN YANG TERBAIK';
+        flagLines.push(
+          `🚚 *EKSPEDISI ${eksLabel}*\n` +
+          `   → Dipakai: ${usedEks || '—'}\n` +
+          `   → Rekomendasi: ${rekEkspedisi}`
+        );
       }
 
       const msg =
@@ -573,6 +655,23 @@ async function savePassword() {
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
+function extractEkspedisi(pembayaran) {
+  if (!pembayaran) return '';
+  const p = String(pembayaran).toUpperCase();
+  const list = ['SICEPAT','ANTERAJA','NINJA','LION','TIKI','SAP','IDX','JNE','JNT','SCP','POS'];
+  for (const eks of list) {
+    if (p.includes(eks)) {
+      if (eks === 'SCP' || eks === 'SICEPAT') return 'SiCepat';
+      if (eks === 'ANTERAJA') return 'Anteraja';
+      if (eks === 'NINJA')    return 'Ninja';
+      if (eks === 'LION')     return 'Lion';
+      if (eks === 'POS')      return 'POS Indonesia';
+      return eks; // JNE, JNT, TIKI, SAP, IDX
+    }
+  }
+  return '';
+}
+
 function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
