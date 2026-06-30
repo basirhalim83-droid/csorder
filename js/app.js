@@ -1,3 +1,9 @@
+// ── SUPABASE BOTWА (untuk wilayah_id) ────────────────────────────────────────
+const sbWilayah = supabase.createClient(
+  'https://hdplngjvthwcmgkehmvy.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkcGxuZ2p2dGh3Y21na2VobXZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTcyMDIsImV4cCI6MjA5NjQ5MzIwMn0.1Q9L9J8txAtcJYq_B3grjpd3NWKskJX2lr5mpCjm9Qg'
+);
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let currentUser   = null;
 let currentProfile = null;
@@ -401,6 +407,7 @@ async function doParse() {
     document.getElementById('preview-card').classList.add('show');
     document.getElementById('btn-submit').disabled = false;
     showToast('Parsing berhasil! Periksa hasilnya.', 'success');
+    validateWilayah();
 
     // Scroll ke preview
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -422,6 +429,138 @@ function fillPreviewForm(d) {
     const el = document.getElementById('f-'+f);
     if (el) el.value = d[keys[i]] || '';
   });
+}
+
+// ── VALIDASI WILAYAH ──────────────────────────────────────────────────────────
+function valSetField(id, state, msg) {
+  const el   = document.getElementById('f-' + id);
+  const hint = document.getElementById('hint-' + id);
+  if (!el || !hint) return;
+  el.classList.remove('val-ok', 'val-err', 'val-warn');
+  hint.className = 'val-hint';
+  hint.innerHTML = '';
+  if (state === 'ok')   { el.classList.add('val-ok');   hint.classList.add('ok');   hint.textContent = msg || ''; }
+  if (state === 'err')  { el.classList.add('val-err');  hint.classList.add('err');  hint.textContent = msg || '⚠ Tidak ditemukan di data wilayah'; }
+  if (state === 'warn') { el.classList.add('val-warn'); hint.classList.add('warn'); hint.innerHTML   = msg || ''; }
+}
+
+function valClearAll() {
+  ['kelurahan','kecamatan','kabupaten','provinsi','kodepos'].forEach(id => {
+    const el   = document.getElementById('f-' + id);
+    const hint = document.getElementById('hint-' + id);
+    if (el)   el.classList.remove('val-ok','val-err','val-warn');
+    if (hint) { hint.className = 'val-hint'; hint.innerHTML = ''; }
+  });
+}
+
+async function validateWilayah() {
+  const kel = (document.getElementById('f-kelurahan')?.value || '').trim();
+  const kec = (document.getElementById('f-kecamatan')?.value || '').trim();
+  const kab = (document.getElementById('f-kabupaten')?.value || '').trim();
+  const prov= (document.getElementById('f-provinsi')?.value  || '').trim();
+  const kpos= (document.getElementById('f-kodepos')?.value   || '').trim();
+
+  if (!kel && !kec && !kab && !prov) return;
+  valClearAll();
+
+  // ── 1. Validasi dari wilayah_id Supabase ──────────────────────────────────
+  let rows = [];
+  try {
+    // Cari kombinasi kecamatan + kabupaten dulu (paling akurat)
+    if (kec && kab) {
+      const { data } = await sbWilayah.from('wilayah_id')
+        .select('kelurahan,kecamatan,kabupaten,provinsi')
+        .ilike('kecamatan', `%${kec}%`)
+        .ilike('kabupaten', `%${kab}%`)
+        .limit(10);
+      rows = data || [];
+    }
+    // Fallback: kecamatan saja
+    if (!rows.length && kec) {
+      const { data } = await sbWilayah.from('wilayah_id')
+        .select('kelurahan,kecamatan,kabupaten,provinsi')
+        .ilike('kecamatan', `%${kec}%`)
+        .limit(10);
+      rows = data || [];
+    }
+    // Fallback: kabupaten saja
+    if (!rows.length && kab) {
+      const { data } = await sbWilayah.from('wilayah_id')
+        .select('kelurahan,kecamatan,kabupaten,provinsi')
+        .ilike('kabupaten', `%${kab}%`)
+        .limit(10);
+      rows = data || [];
+    }
+  } catch(_) { /* biarkan kosong */ }
+
+  const norm = s => (s||'').trim().toUpperCase();
+
+  if (!rows.length) {
+    // Tidak ada data sama sekali → semua merah
+    valSetField('kecamatan', 'err');
+    valSetField('kabupaten', 'err');
+    valSetField('kelurahan', 'err');
+    valSetField('provinsi',  'err');
+  } else {
+    // Cek kecamatan
+    const kecMatch = rows.filter(r => norm(r.kecamatan) === norm(kec));
+    if (kecMatch.length) valSetField('kecamatan', 'ok');
+    else {
+      const saran = [...new Set(rows.map(r => r.kecamatan))].slice(0,2).join(' / ');
+      valSetField('kecamatan', 'err', `⚠ Tidak ditemukan. Mungkin: ${saran}`);
+    }
+
+    // Cek kabupaten dari baris yang kecamatannya cocok (atau semua kalau tidak ada)
+    const baseRows = kecMatch.length ? kecMatch : rows;
+    const kabMatch = baseRows.filter(r => norm(r.kabupaten) === norm(kab));
+    if (kabMatch.length) valSetField('kabupaten', 'ok');
+    else {
+      const saran = [...new Set(baseRows.map(r => r.kabupaten))].slice(0,2).join(' / ');
+      valSetField('kabupaten', 'err', `⚠ Tidak ditemukan. Mungkin: ${saran}`);
+    }
+
+    // Cek provinsi
+    const provBase = kabMatch.length ? kabMatch : baseRows;
+    const provMatch = provBase.filter(r => norm(r.provinsi) === norm(prov));
+    if (provMatch.length) valSetField('provinsi', 'ok');
+    else {
+      const saran = [...new Set(provBase.map(r => r.provinsi))].slice(0,1).join('');
+      valSetField('provinsi', 'err', saran ? `⚠ Mungkin: ${saran}` : undefined);
+    }
+
+    // Cek kelurahan
+    const kelBase = kabMatch.length ? kabMatch : baseRows;
+    const kelMatch = kelBase.filter(r => norm(r.kelurahan) === norm(kel));
+    if (kelMatch.length) valSetField('kelurahan', 'ok');
+    else {
+      const saran = [...new Set(kelBase.map(r => r.kelurahan))].slice(0,3).join(', ');
+      valSetField('kelurahan', 'err', saran ? `⚠ Tidak ditemukan. Mungkin: ${saran}` : undefined);
+    }
+  }
+
+  // ── 2. Validasi kodepos dari Mengantar public ──────────────────────────────
+  if (!kec && !kab) return;
+  try {
+    const q   = [kel, kec].filter(Boolean).join(', ');
+    const res = await fetch(`/api/wilayah?q=${encodeURIComponent(q)}`);
+    const js  = await res.json();
+    const kodeposRek = js.kodepos || '';
+    if (kodeposRek) {
+      if (norm(kpos) === norm(kodeposRek)) {
+        valSetField('kodepos', 'ok');
+      } else {
+        valSetField('kodepos', 'warn',
+          `Rekomendasi: <strong>${kodeposRek}</strong>` +
+          `<button class="hint-apply" onclick="applyKodepos('${kodeposRek}')">Pakai ini</button>`
+        );
+      }
+    }
+  } catch(_) { /* skip kodepos kalau gagal */ }
+}
+
+function applyKodepos(val) {
+  const el = document.getElementById('f-kodepos');
+  if (el) { el.value = val; valSetField('kodepos', 'ok'); }
 }
 
 function getFormValues() {
