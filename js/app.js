@@ -192,7 +192,6 @@ function drpNav(dir) {
     document.getElementById('theme-icon-mobile').textContent = '☀️';
   }
 
-  trkInitDates();
   await loadDashboard();
   await loadHistoryMini();
   checkAndShowLockBanner();
@@ -1402,24 +1401,160 @@ function showToast(msg, type = 'info') {
 // ── TRACKING ORDER ────────────────────────────────────────────────────────────
 let trkAllData = []; // cache untuk applyTrkFilter tanpa re-query
 
-function trkInitDates() {
-  // Default: 30 hari terakhir
-  const today = todayStr();
-  const d30   = new Date();
-  d30.setDate(d30.getDate() - 29);
-  const start = d30.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-  const startEl = document.getElementById('trk-start');
-  const endEl   = document.getElementById('trk-end');
-  if (startEl && !startEl.value) startEl.value = start;
-  if (endEl   && !endEl.value)   endEl.value   = today;
+// ── TRACKING DATE RANGE PICKER ───────────────────────────────────────────────
+let trkDrpSelStart = null, trkDrpSelEnd = null, trkDrpPickingEnd = false;
+let trkDrpViewYear = new Date().getFullYear(), trkDrpViewMonth = new Date().getMonth();
+let trkDrpStart = null, trkDrpEnd = null;
+
+// Init default: 30 hari terakhir
+(function() {
+  trkDrpSelStart = new Date(Date.now() - 29*864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  trkDrpStart = trkDrpSelStart.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  trkDrpEnd   = trkDrpSelEnd.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+})();
+
+function trkDrpToggle() {
+  const dd = document.getElementById('trk-drp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) { trkDrpRender(); document.addEventListener('click', trkDrpOutside); }
+  else document.removeEventListener('click', trkDrpOutside);
+}
+
+function trkDrpClose() {
+  document.getElementById('trk-drp-dropdown').classList.remove('open');
+  document.removeEventListener('click', trkDrpOutside);
+}
+
+function trkDrpOutside(e) {
+  const dd = document.getElementById('trk-drp-dropdown');
+  const tr = document.getElementById('trk-drp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) trkDrpClose();
+}
+
+function trkDrpPreset(days, label, btn) {
+  trkDrpSelStart = new Date(Date.now() - (days-1)*864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trkDrpUpdateSel(); trkDrpRender();
+}
+
+function trkDrpPresetYesterday(btn) {
+  trkDrpSelStart = new Date(Date.now()-864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(Date.now()-864e5); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trkDrpUpdateSel(); trkDrpRender();
+}
+
+function trkDrpPresetThisMonth(btn) {
+  trkDrpSelStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trkDrpUpdateSel(); trkDrpRender();
+}
+
+function trkDrpPresetLastMonth(btn) {
+  const n = new Date();
+  trkDrpSelStart = new Date(n.getFullYear(), n.getMonth()-1, 1);
+  trkDrpSelEnd   = new Date(n.getFullYear(), n.getMonth(), 0); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trkDrpUpdateSel(); trkDrpRender();
+}
+
+function trkDrpUpdateSel() {
+  document.getElementById('trk-drp-sel-start').textContent = drpFmt(trkDrpSelStart);
+  document.getElementById('trk-drp-sel-end').textContent   = drpFmt(trkDrpSelEnd);
+}
+
+function trkDrpApply() {
+  if (!trkDrpSelStart) return;
+  const s = trkDrpSelStart;
+  const e = trkDrpSelEnd || trkDrpSelStart;
+  e.setHours(23,59,59,999);
+  trkDrpStart = s.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  trkDrpEnd   = e.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const label = trkDrpStart === trkDrpEnd
+    ? drpFmt(s)
+    : drpFmt(s) + ' — ' + drpFmt(e);
+  document.getElementById('trk-drp-label').textContent = label;
+  trkDrpClose();
+  loadTracking();
+}
+
+function trkDrpClickDay(y, m, d) {
+  const clicked = new Date(y, m, d);
+  if (!trkDrpSelStart || (trkDrpSelStart && trkDrpSelEnd)) {
+    trkDrpSelStart = clicked; trkDrpSelEnd = null; trkDrpPickingEnd = true;
+  } else {
+    if (clicked < trkDrpSelStart) { trkDrpSelEnd = trkDrpSelStart; trkDrpSelStart = clicked; }
+    else trkDrpSelEnd = clicked;
+    trkDrpPickingEnd = false;
+  }
+  trkDrpUpdateSel(); trkDrpRender();
+}
+
+function trkDrpRender() {
+  const y = trkDrpViewYear, m = trkDrpViewMonth;
+  const firstDay    = new Date(y, m, 1).getDay();
+  const startPad    = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const prevDays    = new Date(y, m, 0).getDate();
+  const today       = new Date(); today.setHours(0,0,0,0);
+
+  let html = `<div class="drp-cal-hdr">
+    <button class="drp-nav" onclick="trkDrpNav(-1)">‹</button>
+    <div class="drp-cal-title">${MONTHS_ID[m]} ${y}</div>
+    <button class="drp-nav" onclick="trkDrpNav(1)">›</button>
+  </div>
+  <div class="drp-days-hdr">${DAYS_ID.map(d => '<span>' + d + '</span>').join('')}</div>
+  <div class="drp-days">`;
+
+  for (let i = startPad; i > 0; i--) {
+    html += `<button class="drp-day other-month" onclick="trkDrpNav(-1)">${prevDays-i+1}</button>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cur     = new Date(y, m, d);
+    const isToday = cur.getTime() === today.getTime();
+    const isStart = trkDrpSelStart && cur.getTime() === new Date(trkDrpSelStart.getFullYear(), trkDrpSelStart.getMonth(), trkDrpSelStart.getDate()).getTime();
+    const isEnd   = trkDrpSelEnd   && cur.getTime() === new Date(trkDrpSelEnd.getFullYear(),   trkDrpSelEnd.getMonth(),   trkDrpSelEnd.getDate()).getTime();
+    const inRange = trkDrpSelStart && trkDrpSelEnd && cur > trkDrpSelStart && cur < trkDrpSelEnd;
+
+    let cls = 'drp-day';
+    if (isStart && isEnd) cls += ' selected';
+    else if (isStart)     cls += ' range-start';
+    else if (isEnd)       cls += ' range-end';
+    else if (inRange)     cls += ' in-range';
+    if (isToday) cls += ' today';
+
+    html += `<button class="${cls}" onclick="trkDrpClickDay(${y},${m},${d})">${d}</button>`;
+  }
+
+  const total = startPad + daysInMonth;
+  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) {
+    html += `<button class="drp-day other-month" onclick="trkDrpNav(1)">${d}</button>`;
+  }
+  html += '</div>';
+  document.getElementById('trk-drp-cal').innerHTML = html;
+}
+
+function trkDrpNav(dir) {
+  trkDrpViewMonth += dir;
+  if (trkDrpViewMonth > 11) { trkDrpViewMonth = 0; trkDrpViewYear++; }
+  if (trkDrpViewMonth < 0)  { trkDrpViewMonth = 11; trkDrpViewYear--; }
+  trkDrpRender();
 }
 
 async function loadTracking() {
   if (!currentUser) return;
-  trkInitDates();
 
-  const trkStart = document.getElementById('trk-start')?.value || todayStr();
-  const trkEnd   = document.getElementById('trk-end')?.value   || todayStr();
+  const trkStart = trkDrpStart || todayStr();
+  const trkEnd   = trkDrpEnd   || todayStr();
 
   const tbody = document.getElementById('trk-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Memuat data...</td></tr>';
