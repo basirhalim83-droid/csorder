@@ -11,9 +11,9 @@ let drpViewYear = new Date().getFullYear(), drpViewMonth = new Date().getMonth()
 const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const DAYS_ID   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 
-// State filter aktif — default hari ini, disimpan sebagai string YYYY-MM-DD (WIB)
-let filterDateStart = todayStr();
-let filterDateEnd   = todayStr();
+// State filter aktif — default pakai cutoff logic (sebelum jam 8 = kemarin)
+let filterDateStart = getOrderDate();
+let filterDateEnd   = getOrderDate();
 
 function drpFmt(d) {
   if (!d) return '—';
@@ -946,7 +946,14 @@ async function doSubmitExec() {
 
     const { data: inserted, error: insertErr } = await sb
       .from('orderan_masuk').insert(insertRow).select().single();
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      // Unique constraint violation — HP + tanggal sudah ada (race condition / submit ganda)
+      if (insertErr.code === '23505') {
+        showToast('⚠️ Order dengan nomor HP ini sudah masuk hari ini oleh CS lain. Cek dashboard.', 'error');
+        return;
+      }
+      throw insertErr;
+    }
 
     const insertedId = inserted.id;
 
