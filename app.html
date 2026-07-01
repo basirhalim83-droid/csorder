@@ -426,12 +426,38 @@ Keterangan: Bonus masker"></textarea>
         <div class="page-title" style="margin-bottom:2px">Tracking Order</div>
         <div class="page-sub" style="margin:0">Status pengiriman orderan kamu</div>
       </div>
-      <!-- Date filter -->
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="date" id="trk-start" class="trk-date-input">
-        <span style="color:var(--muted);font-size:12px">s/d</span>
-        <input type="date" id="trk-end" class="trk-date-input">
-        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:8px 14px">🔍 Cari</button>
+      <!-- Date Range Picker -->
+      <div style="position:relative" id="trk-drp-wrap">
+        <button class="drp-trigger" onclick="trkDrpToggle()" id="trk-drp-trigger">
+          <span>📅</span>
+          <span id="trk-drp-label">30 Hari Terakhir</span>
+          <span style="color:var(--muted)">▾</span>
+        </button>
+        <div class="drp-dropdown" id="trk-drp-dropdown">
+          <div class="drp-presets" style="width:145px;flex-shrink:0;border-right:1px solid var(--border);padding:10px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPreset(1,'Hari Ini',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Hari Ini</button>
+            <button class="trk-drp-preset" onclick="trkDrpPresetYesterday(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Kemarin</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPreset(7,'7 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">7 Hari Terakhir</button>
+            <button class="trk-drp-preset" onclick="trkDrpPreset(14,'14 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">14 Hari Terakhir</button>
+            <button class="trk-drp-preset active" onclick="trkDrpPreset(30,'30 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--accent);font-weight:600">30 Hari Terakhir</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPresetThisMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Ini</button>
+            <button class="trk-drp-preset" onclick="trkDrpPresetLastMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Lalu</button>
+          </div>
+          <div style="display:flex;flex-direction:column;flex:1;min-width:280px">
+            <div class="drp-cal" id="trk-drp-cal" style="padding:14px;flex:1"></div>
+            <div class="drp-footer" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--muted)">
+                <span id="trk-drp-sel-start">—</span> → <span id="trk-drp-sel-end">—</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="drp-cancel" onclick="trkDrpClose()">Batal</button>
+                <button class="drp-apply" onclick="trkDrpApply()">Terapkan</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
