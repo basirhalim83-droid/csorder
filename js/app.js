@@ -283,8 +283,34 @@ async function loadDashboard() {
 
     renderDashTable(todayOrders);
     renderOrderCards(todayOrders);
+    loadDashboardAlerts(todayOrders);
   } catch(e) {
     showToast('Gagal load dashboard: ' + e.message, 'error');
+  }
+}
+
+// Banner "N order Bermasalah/Retur" — dipisah dari loadDashboard() supaya gagal cek tracking
+// gak ikut nge-block render tabel/summary utama
+async function loadDashboardAlerts(masukList) {
+  const wrap = document.getElementById('dash-alerts');
+  if (!wrap) return;
+  try {
+    const rows = await trFetchTrackingRows(masukList, { start: filterDateStart, end: filterDateEnd });
+    const problem = rows.filter(r => ['BERMASALAH','RETUR'].includes(trEffectiveStage(r)));
+    if (!problem.length) { wrap.innerHTML = ''; return; }
+
+    const bermasalah = problem.filter(r => trEffectiveStage(r) === 'BERMASALAH').length;
+    const retur       = problem.filter(r => trEffectiveStage(r) === 'RETUR').length;
+    const parts = [];
+    if (bermasalah) parts.push(`${bermasalah} Bermasalah`);
+    if (retur)      parts.push(`${retur} Retur`);
+
+    wrap.innerHTML = `<div class="trk-alert trk-alert-warn" style="cursor:pointer" onclick="switchPage('tracking')">
+      ⚠️ <strong>${problem.length} order</strong> butuh perhatian (${parts.join(' · ')}) — klik buat lihat di Tracking Order
+    </div>`;
+  } catch (e) {
+    // Gagal cek tracking gak ganggu Dashboard utama, diam aja
+    wrap.innerHTML = '';
   }
 }
 
@@ -1711,6 +1737,63 @@ function renderTrkTabs() {
   });
 }
 
+// Ambil order (dari orderan_masuk) + status tracking live-nya (all_orderan + cs_order_tracking), keyed by HP+tanggal.
+// Dipakai bareng oleh loadTracking() (halaman Tracking Order) dan loadDashboard() (banner notif Bermasalah/Retur).
+async function trFetchTrackingRows(masukList, range) {
+  if (!masukList.length) return [];
+
+  // 1. Kumpulkan pasangan HP+tanggal dari orderan_masuk
+  const hpTanggalMap = {};
+  masukList.forEach(r => {
+    let hp = (r.hp || '').replace(/\D/g, '');
+    if (hp.startsWith('62')) hp = hp.slice(2);
+    if (hp.startsWith('0'))  hp = hp.slice(1);
+    if (!hp) return;
+    if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
+    if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
+  });
+
+  const hpList = Object.keys(hpTanggalMap);
+  if (!hpList.length) return [];
+
+  // 2. Query all_orderan: filter sumber='cs_input' + HP (+ rentang tanggal kalau dikasih)
+  //    sumber='cs_input' memastikan tidak ikut ambil orderan lama dari ValidasiOrder
+  let q = sb.from('all_orderan')
+    .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+    .eq('sumber', 'cs_input')
+    .in('hp', hpList)
+    .limit(500);
+  if (range?.start) q = q.gte('tanggal', range.start);
+  if (range?.end)   q = q.lte('tanggal', range.end);
+  const { data: allData, error: allErr } = await q.order('tanggal', { ascending: false });
+  if (allErr) throw allErr;
+
+  // 3. Filter tambahan: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
+  const filtered = (allData || []).filter(r => {
+    const tgl = (r.tanggal || '').slice(0, 10);
+    return hpTanggalMap[r.hp]?.has(tgl);
+  });
+
+  // 4. Merge status tracking live dari cs_order_tracking (hasil cron/manual check), keyed by resi
+  const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
+  let trkByResi = {};
+  if (resiList.length) {
+    const { data: trkData } = await sb.from('cs_order_tracking')
+      .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+      .in('resi', resiList);
+    (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+  }
+  filtered.forEach(r => {
+    const t = r.resi ? trkByResi[r.resi.trim()] : null;
+    r.status_resi            = t?.status_resi            || null;
+    r.status_resi_step       = t?.status_resi_step        || null;
+    r.status_resi_updated_at = t?.status_resi_updated_at  || null;
+    r.status_resi_detail     = t?.status_resi_detail      || null;
+  });
+
+  return filtered;
+}
+
 async function loadTracking() {
   if (!currentUser) return;
 
@@ -1723,7 +1806,6 @@ async function loadTracking() {
   if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
 
   try {
-    // 1. Ambil order CS di rentang tanggal ini
     const { data: masukData, error: masukErr } = await sb.from('orderan_masuk')
       .select('hp, nama, tanggal')
       .eq('cs_id', currentUser.id)
@@ -1742,63 +1824,7 @@ async function loadTracking() {
       return;
     }
 
-    // 2. Kumpulkan pasangan HP+tanggal dari orderan_masuk
-    // Map: hp_normalized → set of tanggal
-    const hpTanggalMap = {};
-    masukList.forEach(r => {
-      let hp = (r.hp || '').replace(/\D/g, '');
-      if (hp.startsWith('62')) hp = hp.slice(2);
-      if (hp.startsWith('0'))  hp = hp.slice(1);
-      if (!hp) return;
-      if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
-      if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
-    });
-
-    const hpList = Object.keys(hpTanggalMap);
-    if (!hpList.length) {
-      trkAllData = [];
-      updateTrkCards([]);
-      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data HP valid.</div>';
-      return;
-    }
-
-    // 3. Query all_orderan: filter sumber='cs_input' + HP + tanggal range
-    //    sumber='cs_input' memastikan tidak ikut ambil orderan lama dari ValidasiOrder
-    const { data: allData, error: allErr } = await sb.from('all_orderan')
-      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
-      .eq('sumber', 'cs_input')
-      .in('hp', hpList)
-      .gte('tanggal', trkStart)
-      .lte('tanggal', trkEnd)
-      .order('tanggal', { ascending: false })
-      .limit(500);
-
-    if (allErr) throw allErr;
-
-    // 4. Filter tambahan: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
-    const filtered = (allData || []).filter(r => {
-      const tgl = (r.tanggal || '').slice(0, 10);
-      return hpTanggalMap[r.hp]?.has(tgl);
-    });
-
-    // 5. Merge status tracking live dari cs_order_tracking (hasil cron/manual check), keyed by resi
-    const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
-    let trkByResi = {};
-    if (resiList.length) {
-      const { data: trkData } = await sb.from('cs_order_tracking')
-        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
-        .in('resi', resiList);
-      (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
-    }
-    filtered.forEach(r => {
-      const t = r.resi ? trkByResi[r.resi.trim()] : null;
-      r.status_resi            = t?.status_resi            || null;
-      r.status_resi_step       = t?.status_resi_step        || null;
-      r.status_resi_updated_at = t?.status_resi_updated_at  || null;
-      r.status_resi_detail     = t?.status_resi_detail      || null;
-    });
-
-    trkAllData = filtered;
+    trkAllData = await trFetchTrackingRows(masukList, { start: trkStart, end: trkEnd });
 
     updateTrkCards(trkAllData);
     showTrkAlerts(trkAllData);
