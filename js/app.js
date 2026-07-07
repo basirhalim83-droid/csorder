@@ -1679,15 +1679,48 @@ function trkDrpNav(dir) {
   trkDrpRender();
 }
 
+// Tabs status — sama persis dengan CRM (BELUM_DICEK sengaja tidak punya tab sendiri, cuma nongol di "Semua")
+const TR_TABS = [
+  { key:'SEMUA',         label:'Semua' },
+  { key:'MENUNGGU_RESI', label:'⏳ Menunggu Resi' },
+  { key:'DIKIRIM',       label:'🚚 Dikirim' },
+  { key:'KOTA_TUJUAN',   label:'🏙️ Kota Tujuan' },
+  { key:'OTW',           label:'🛵 OTW' },
+  { key:'SAMPAI',        label:'✅ Sampai' },
+  { key:'BERMASALAH',    label:'⚠️ Bermasalah' },
+  { key:'RETUR',         label:'↩️ Retur' },
+];
+const TR_ON_PROSES_STAGES = ['MENUNGGU_RESI','BELUM_DICEK','DIKIRIM','KOTA_TUJUAN','OTW'];
+let trFilterStage = 'SEMUA';
+
+function trSetFilter(key) {
+  trFilterStage = key;
+  renderTrkTabs();
+  applyTrkFilter();
+}
+
+function renderTrkTabs() {
+  const wrap = document.getElementById('trk-tabs');
+  if (!wrap) return;
+  wrap.innerHTML = TR_TABS.map(t =>
+    `<div class="tr-tab ${trFilterStage===t.key?'tr-tab-active':''}" onclick="trSetFilter('${t.key}')">${t.label}</div>`
+  ).join('');
+  const cardMap = { SEMUA:'SEMUA', ON_PROSES:'ON_PROSES_GROUP', BERMASALAH:'BERMASALAH', RETUR:'RETUR', SAMPAI:'SAMPAI' };
+  Object.entries(cardMap).forEach(([cardKey, filterKey]) => {
+    document.getElementById('trk-stat-'+cardKey)?.classList.toggle('tr-stat-active', trFilterStage===filterKey);
+  });
+}
+
 async function loadTracking() {
   if (!currentUser) return;
+
+  renderTrkTabs();
 
   const trkStart = trkDrpStart || todayStr();
   const trkEnd   = trkDrpEnd   || todayStr();
 
-  const tbody = document.getElementById('trk-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Memuat data...</td></tr>';
-  document.getElementById('trk-info')?.setAttribute('data-full', '0');
+  const cardsEl = document.getElementById('trk-cards');
+  if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
 
   try {
     // 1. Ambil order CS di rentang tanggal ini
@@ -1704,10 +1737,8 @@ async function loadTracking() {
       trkAllData = [];
       updateTrkCards([]);
       document.getElementById('trk-alerts').innerHTML = '';
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada orderan di periode ini.</td></tr>';
       document.getElementById('trk-info').textContent = '0 data';
-      document.getElementById('trk-info-mobile').textContent = '0 data';
-      document.getElementById('trk-cards').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Tidak ada data di periode ini.</div>';
+      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di periode ini.</div>';
       return;
     }
 
@@ -1727,7 +1758,7 @@ async function loadTracking() {
     if (!hpList.length) {
       trkAllData = [];
       updateTrkCards([]);
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada data HP valid.</td></tr>';
+      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data HP valid.</div>';
       return;
     }
 
@@ -1775,19 +1806,24 @@ async function loadTracking() {
 
   } catch(e) {
     showToast('Gagal load tracking: ' + e.message, 'error');
-    const tbody = document.getElementById('trk-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Gagal memuat data.</td></tr>';
+    if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Gagal memuat data.</div>';
   }
 }
 
 function applyTrkFilter() {
-  const statusF = document.getElementById('trk-filter-status')?.value || '';
-  const eksF    = document.getElementById('trk-filter-eks')?.value    || '';
-  const search  = (document.getElementById('trk-search')?.value || '').toLowerCase();
+  const eksF   = document.getElementById('trk-filter-eks')?.value    || '';
+  const search = (document.getElementById('trk-search')?.value || '').toLowerCase();
 
-  let filtered = trkAllData;
+  let filtered = trkAllData.filter(r => {
+    const stage = trEffectiveStage(r);
+    if (trFilterStage === 'ON_PROSES_GROUP') {
+      if (!TR_ON_PROSES_STAGES.includes(stage)) return false;
+    } else if (trFilterStage !== 'SEMUA' && stage !== trFilterStage) {
+      return false;
+    }
+    return true;
+  });
 
-  if (statusF) filtered = filtered.filter(r => trEffectiveStage(r) === statusF);
   if (eksF)    filtered = filtered.filter(r => extractEkspedisi(r.pembayaran) === eksF);
   if (search)  filtered = filtered.filter(r =>
     (r.nama   || '').toLowerCase().includes(search) ||
@@ -1795,13 +1831,11 @@ function applyTrkFilter() {
     (r.resi   || '').toLowerCase().includes(search)
   );
 
-  renderTrkTable(filtered);
   renderTrkCards(filtered);
   const info = filtered.length < trkAllData.length
     ? `${filtered.length} dari ${trkAllData.length} data`
     : `${trkAllData.length} data`;
   document.getElementById('trk-info').textContent = info;
-  document.getElementById('trk-info-mobile').textContent = info;
 }
 
 function trBadgeHtml(row) {
@@ -1865,39 +1899,11 @@ function showTrkAlerts(list) {
   wrap.innerHTML = alerts.join('');
 }
 
-function renderTrkTable(list) {
-  const tbody = document.getElementById('trk-tbody');
-  if (!tbody) return;
-  if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada data yang cocok.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = list.map(r => {
-    const eks       = extractEkspedisi(r.pembayaran) || r.pembayaran || '—';
-    const hp08      = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
-    const resiHtml  = r.resi
-      ? `<a href="#" onclick="event.stopPropagation();trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" class="trk-resi-link">${r.resi} ↗</a>`
-      : '<span style="color:var(--muted)">—</span>';
-
-    return `<tr${r.resi ? ` style="cursor:pointer" onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')"` : ''}>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.tanggal || '—'}</td>
-      <td title="${r.nama || ''}">${r.nama || '—'}</td>
-      <td style="font-family:var(--mono);font-size:12px">${hp08}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.no || '—'}</td>
-      <td style="font-size:12px">${eks}</td>
-      <td style="font-family:var(--mono);font-size:11px">${resiHtml}</td>
-      <td style="font-size:12px">${r.jumlah || '—'}</td>
-      <td style="font-size:12px">${r.kabupaten || '—'}</td>
-      <td>${trBadgeHtml(r)}</td>
-    </tr>`;
-  }).join('');
-}
-
 function renderTrkCards(list) {
   const wrap = document.getElementById('trk-cards');
   if (!wrap) return;
   if (!list.length) {
-    wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Tidak ada data yang cocok.</div>';
+    wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data yang cocok.</div>';
     return;
   }
   wrap.innerHTML = list.map(r => {
@@ -1998,11 +2004,11 @@ async function trManualCheckFromModal() {
 }
 
 async function trRefreshAll() {
-  const btns = ['trk-refresh-all-btn', 'trk-refresh-all-btn-mobile']
-    .map(id => document.getElementById(id)).filter(Boolean);
-  if (!btns.length) return;
-  const origLabel = btns[0].textContent;
-  btns.forEach(b => b.disabled = true);
+  const btn = document.getElementById('trk-refresh-all-btn');
+  if (!btn) return;
+  const btns = [btn];
+  const origLabel = btn.textContent;
+  btn.disabled = true;
   try {
     const targets = trkAllData.filter(r => r.resi && r.status_resi !== 'SAMPAI' && r.status_resi !== 'RETUR');
     if (!targets.length) { showToast('Tidak ada resi yang perlu dicek.', 'info'); return; }
