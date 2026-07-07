@@ -467,25 +467,25 @@ Keterangan: Bonus masker"></textarea>
       </div>
     </div>
 
-    <!-- Summary cards -->
+    <!-- Summary cards (klik buat filter, sama kaya CRM) -->
     <div class="sum-grid" style="margin-top:12px;margin-bottom:12px">
-      <div class="sum-card">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-SEMUA" onclick="trSetFilter('SEMUA')">
         <div class="s-label">Total Kiriman</div>
         <div class="s-value s-total" id="trk-total">—</div>
       </div>
-      <div class="sum-card">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-ON_PROSES" onclick="trSetFilter('ON_PROSES_GROUP')">
         <div class="s-label">On Proses</div>
         <div class="s-value s-tunggu" id="trk-proses">—</div>
       </div>
-      <div class="sum-card">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-BERMASALAH" onclick="trSetFilter('BERMASALAH')">
         <div class="s-label">Undell</div>
         <div class="s-value" style="color:#d97706" id="trk-undell">—</div>
       </div>
-      <div class="sum-card">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-SAMPAI" onclick="trSetFilter('SAMPAI')">
         <div class="s-label">Delivered</div>
         <div class="s-value s-kirim" id="trk-delivered">—</div>
       </div>
-      <div class="sum-card">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-RETUR" onclick="trSetFilter('RETUR')">
         <div class="s-label">Retur</div>
         <div class="s-value s-cancel" id="trk-retur">—</div>
       </div>
@@ -494,19 +494,11 @@ Keterangan: Bonus masker"></textarea>
     <!-- Alert banners -->
     <div id="trk-alerts"></div>
 
+    <!-- Tabs status (sama kaya CRM) -->
+    <div class="tr-tabs" id="trk-tabs"></div>
+
     <!-- Filters -->
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <select id="trk-filter-status" class="trk-select" onchange="applyTrkFilter()">
-        <option value="">Semua Status</option>
-        <option value="MENUNGGU_RESI">⏳ Menunggu Resi</option>
-        <option value="BELUM_DICEK">🔍 Belum Dicek</option>
-        <option value="DIKIRIM">🚚 Dikirim</option>
-        <option value="KOTA_TUJUAN">🏙️ Kota Tujuan</option>
-        <option value="OTW">🛵 OTW</option>
-        <option value="SAMPAI">✅ Sampai</option>
-        <option value="BERMASALAH">⚠️ Bermasalah</option>
-        <option value="RETUR">↩️ Retur</option>
-      </select>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <select id="trk-filter-eks" class="trk-select" onchange="applyTrkFilter()">
         <option value="">Semua Ekspedisi</option>
         <option value="JNE">JNE</option>
@@ -519,50 +511,15 @@ Keterangan: Bonus masker"></textarea>
         <option value="SAP">SAP</option>
       </select>
       <input type="text" id="trk-search" class="trk-search" placeholder="🔍 Cari nama / HP / resi..." oninput="applyTrkFilter()">
-    </div>
-
-    <!-- Table -->
-    <div class="table-wrap">
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Nama</th>
-              <th>No HP</th>
-              <th>No Order</th>
-              <th>Ekspedisi</th>
-              <th>Resi</th>
-              <th>Jumlah</th>
-              <th>Kabupaten</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="trk-tbody">
-            <tr><td colspan="9" class="empty-state">Pilih rentang tanggal lalu klik Cari</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div style="padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <span id="trk-info">—</span>
-        <div style="display:flex;gap:8px">
-          <button class="btn-secondary" id="trk-refresh-all-btn" onclick="trRefreshAll()" style="font-size:11px;padding:5px 10px">📡 Refresh Semua</button>
-          <button class="btn-secondary" onclick="loadTracking()" style="font-size:11px;padding:5px 10px">🔄 Refresh</button>
-        </div>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <span id="trk-info" style="font-size:12px;color:var(--muted);font-family:var(--mono);align-self:center;white-space:nowrap">—</span>
+        <button class="btn-secondary" id="trk-refresh-all-btn" onclick="trRefreshAll()" style="font-size:12px;padding:7px 12px">📡 Refresh Semua</button>
+        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
       </div>
     </div>
 
-    <!-- Mobile: card view -->
-    <div class="order-cards-wrap">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
-        <span id="trk-info-mobile" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</span>
-        <div style="display:flex;gap:8px">
-          <button class="btn-secondary" id="trk-refresh-all-btn-mobile" onclick="trRefreshAll()" style="font-size:12px;padding:7px 12px">📡 Refresh Semua</button>
-          <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
-        </div>
-      </div>
-      <div id="trk-cards"></div>
-    </div>
+    <!-- List (grid card, sama buat desktop & mobile) -->
+    <div id="trk-cards" class="trk-grid"></div>
   </div>
 
 </div><!-- end main-area -->
