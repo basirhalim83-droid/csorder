@@ -1401,6 +1401,135 @@ function showToast(msg, type = 'info') {
 // ── TRACKING ORDER ────────────────────────────────────────────────────────────
 let trkAllData = []; // cache untuk applyTrkFilter tanpa re-query
 
+// ── TRACKING RESI (live, sama engine dengan AdsyCRM) ─────────────────────────
+const TR_STEP_LABELS = ['Konfirmasi','Dikirim','Kota Tujuan','OTW','Sampai'];
+const TR_STAGE_META = {
+  MENUNGGU_RESI: { label:'⏳ Menunggu Resi', color:'var(--warn)',    bg:'var(--warn-light)',    step:1 },
+  BELUM_DICEK:   { label:'🔍 Belum Dicek',   color:'var(--muted)',   bg:'var(--bg)',             step:1 },
+  DIKIRIM:       { label:'🚚 Dikirim',       color:'var(--accent)',  bg:'var(--accent-light)',   step:2 },
+  KOTA_TUJUAN:   { label:'🏙️ Kota Tujuan',  color:'var(--accent)',  bg:'var(--accent-light)',   step:3 },
+  OTW:           { label:'🛵 OTW',           color:'var(--accent)',  bg:'var(--accent-light)',   step:4 },
+  SAMPAI:        { label:'✅ Sampai',        color:'var(--success)', bg:'var(--success-light)',  step:5 },
+  BERMASALAH:    { label:'⚠️ Bermasalah',    color:'var(--danger)',  bg:'var(--danger-light)',   step:2, problem:true },
+  RETUR:         { label:'↩️ Retur',         color:'var(--danger)',  bg:'var(--danger-light)',   step:2, problem:true },
+};
+
+const TR_COURIER_MAP = {
+  'JNE':'JNE','JNT':'JT','SICEPAT':'SiCepat','LION':'lion',
+  'SAP':'SAP','ANTERAJA':'anteraja','NINJA':'Ninja','IDEXPRESS':'iDexpress'
+};
+
+// Bucket ringkasan 4 kategori buat angka stat card (Total/Proses/Undell/Delivered/Retur)
+function trCardState(stage) {
+  if (stage === 'SAMPAI')     return 'delivered';
+  if (stage === 'RETUR')      return 'retur';
+  if (stage === 'BERMASALAH') return 'undell';
+  return 'proses'; // MENUNGGU_RESI, BELUM_DICEK, DIKIRIM, KOTA_TUJUAN, OTW
+}
+
+// Status efektif satu order: resi kosong → menunggu, resi ada tapi belum pernah dicek cron/manual → belum dicek
+function trEffectiveStage(row) {
+  if (!row.resi) return 'MENUNGGU_RESI';
+  if (!row.status_resi || !TR_STAGE_META[row.status_resi]) return 'BELUM_DICEK';
+  return row.status_resi;
+}
+
+function trTimeAgo(iso) {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1)   return 'baru saja';
+  if (mins < 60)  return `${mins} menit lalu`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  return `${Math.floor(hours / 24)} hari lalu`;
+}
+
+function _trNormalizeMengantar(json) {
+  if (!json || !json.success || !json.data) return null;
+  const d = json.data;
+  const history = Array.isArray(d.history) ? d.history : [];
+  const entries = history.map(h => ({ desc: [h.desc, h.code].filter(Boolean).join(' '), group: h.type?.group || null, tag: h.type?.tag || null, reasonDelivery: null }));
+  return {
+    statusCategory: d.statusCategory || d.status || '',
+    entries,
+    detail: { history, receiver: d.RECEIVER_NAME || null, city: d.RECEIVER_CITY || null }
+  };
+}
+
+function _trNormalizePos(json) {
+  if (!json || !json.success || !json.data) return null;
+  const d = json.data;
+  const history = Array.isArray(d.connote_history) ? d.connote_history : [];
+  const entries = history.map(h => ({
+    desc: [h.content, h.content2].filter(Boolean).join(' '),
+    group: null, tag: null,
+    reasonDelivery: h.reason_delivery || null
+  }));
+  return {
+    statusCategory: d.connote_state || '',
+    entries,
+    detail: { history, receiver: d.connote_receiver_name || null, city: null }
+  };
+}
+
+// Sama persis dengan heuristik di api/cron-check-resi.js — disinkron manual (tidak ada build step)
+function trMapTrackingStage({ resi, statusCategory, entries }) {
+  if (!resi) return { stage: 'MENUNGGU_RESI', step: 1 };
+  const cat = (statusCategory || '').toUpperCase();
+  const arr = Array.isArray(entries) ? entries : [];
+  const latest = arr.length ? arr[arr.length - 1] : null;
+  const latestDesc = (latest?.desc || '').toLowerCase();
+  let reachedStep = 2;
+  arr.forEach(e => {
+    const d = (e.desc || '').toLowerCase();
+    if (/sedang diantar|dalam pengantaran|out for delivery|kurir menuju|\botw\b|akan dikirim ke alamat penerima|with delivery courier|delivery courier|diantar ke alamat|on delivery|1st attempt|2nd attempt|percobaan/i.test(d)) reachedStep = Math.max(reachedStep, 4);
+    else if (/kota tujuan|gudang tujuan|tiba di kota|received at destination|received at warehouse|process and forward|inbound|sti-dest/i.test(d)) reachedStep = Math.max(reachedStep, 3);
+  });
+
+  let stage;
+  if (cat.includes('RETUR') || cat.includes('RETURN') || arr.some(e => /retur|dikembalikan|\brts\b|\brto\b|return to sender/i.test(e.desc||''))) {
+    stage = 'RETUR';
+  } else if (cat === 'DELIVERED' || /diterima oleh|delivered|\bpod\b/.test(latestDesc)) {
+    stage = 'SAMPAI';
+  } else {
+    const hasStructuredProblem = arr.some(e => e.group === 'UNDELIVERED' || e.tag === 'actionRequired' || !!e.reasonDelivery);
+    if (hasStructuredProblem || arr.some(e => /gagal|kendala|bermasalah|problematic|tidak ditemukan|alamat tidak (lengkap|dikenal)|tidak ada orang|tidak ditempat|tidak dihuni|menunggu konfirmasi|disimpan di gudang|ditolak|pindah alamat|box undel/i.test(e.desc||''))) {
+      stage = 'BERMASALAH';
+    } else if (reachedStep >= 4) {
+      stage = 'OTW';
+    } else if (reachedStep >= 3) {
+      stage = 'KOTA_TUJUAN';
+    } else {
+      stage = 'DIKIRIM';
+    }
+  }
+  return { stage, step: stage === 'SAMPAI' ? 5 : reachedStep };
+}
+
+// Cek satu resi ke Mengantar/POS on-demand dari browser, kembalikan { stage, step, detail } atau null
+async function checkResiTracking(resi, ekspedisi) {
+  if (!resi) return null;
+  const eks = (ekspedisi || '').toUpperCase();
+  try {
+    let normalized;
+    if (eks === 'POS' || eks.includes('POS')) {
+      const r = await fetch('/api/pos-tracking?resi=' + encodeURIComponent(resi));
+      normalized = _trNormalizePos(await r.json());
+    } else {
+      const courier = TR_COURIER_MAP[ekspedisi] || TR_COURIER_MAP[eks] || ekspedisi;
+      if (!courier) return null;
+      const r = await fetch('/api/tracking?tracking_number=' + encodeURIComponent(resi) + '&courier=' + encodeURIComponent(courier));
+      normalized = _trNormalizeMengantar(await r.json());
+    }
+    if (!normalized) return null;
+    const { stage, step } = trMapTrackingStage({ resi, ...normalized });
+    return { stage, step, detail: normalized.detail };
+  } catch (e) {
+    return null;
+  }
+}
+
 // ── TRACKING DATE RANGE PICKER ───────────────────────────────────────────────
 let trkDrpSelStart = null, trkDrpSelEnd = null, trkDrpPickingEnd = false;
 let trkDrpViewYear = new Date().getFullYear(), trkDrpViewMonth = new Date().getMonth();
@@ -1621,6 +1750,23 @@ async function loadTracking() {
       return hpTanggalMap[r.hp]?.has(tgl);
     });
 
+    // 5. Merge status tracking live dari cs_order_tracking (hasil cron/manual check), keyed by resi
+    const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
+    let trkByResi = {};
+    if (resiList.length) {
+      const { data: trkData } = await sb.from('cs_order_tracking')
+        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+        .in('resi', resiList);
+      (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+    }
+    filtered.forEach(r => {
+      const t = r.resi ? trkByResi[r.resi.trim()] : null;
+      r.status_resi            = t?.status_resi            || null;
+      r.status_resi_step       = t?.status_resi_step        || null;
+      r.status_resi_updated_at = t?.status_resi_updated_at  || null;
+      r.status_resi_detail     = t?.status_resi_detail      || null;
+    });
+
     trkAllData = filtered;
 
     updateTrkCards(trkAllData);
@@ -1641,7 +1787,7 @@ function applyTrkFilter() {
 
   let filtered = trkAllData;
 
-  if (statusF) filtered = filtered.filter(r => getTrkStatusCategory(r.status_akhir) === statusF);
+  if (statusF) filtered = filtered.filter(r => trEffectiveStage(r) === statusF);
   if (eksF)    filtered = filtered.filter(r => extractEkspedisi(r.pembayaran) === eksF);
   if (search)  filtered = filtered.filter(r =>
     (r.nama   || '').toLowerCase().includes(search) ||
@@ -1658,31 +1804,34 @@ function applyTrkFilter() {
   document.getElementById('trk-info-mobile').textContent = info;
 }
 
-function getTrkStatusCategory(s) {
-  if (!s) return 'proses';
-  const v = s.toLowerCase();
-  if (v.includes('retur') || v.includes('return') || v === 'rts') return 'retur';
-  if (v.includes('delivered') || v.includes('terkirim') || v.includes('sukses')
-      || v.includes('success') || v === 'dlv') return 'delivered';
-  if (v.includes('undell') || v.includes('undelivery') || v.includes('tidak terkirim')) return 'undell';
-  return 'proses';
+function trBadgeHtml(row) {
+  const stage = trEffectiveStage(row);
+  const meta  = TR_STAGE_META[stage];
+  const ago   = row.status_resi_updated_at ? ` <span style="opacity:.6;font-weight:400">· ${trTimeAgo(row.status_resi_updated_at)}</span>` : '';
+  return `<span class="badge" style="background:${meta.bg};color:${meta.color}">${meta.label}${ago}</span>`;
 }
 
-function getTrkStatusBadge(s) {
-  const cat   = getTrkStatusCategory(s);
-  const label = s || 'On Proses';
-  if (cat === 'delivered') return `<span class="badge badge-kirim">✓ ${label}</span>`;
-  if (cat === 'retur')     return `<span class="badge badge-rts">↩ ${label}</span>`;
-  if (cat === 'undell')    return `<span class="badge badge-hold">⏸ ${label}</span>`;
-  return `<span class="badge badge-pending">${label}</span>`;
+function trStepperHtml(row) {
+  const stage    = trEffectiveStage(row);
+  const meta     = TR_STAGE_META[stage];
+  const step     = row.status_resi_step || meta.step;
+  const allDone  = stage === 'SAMPAI';
+  return `<div class="tr-stepper">${TR_STEP_LABELS.map((label, i) => {
+    const idx = i + 1;
+    let cls = 'tr-step';
+    if (allDone || idx < step) cls += ' tr-step-done';
+    else if (idx === step) cls += meta.problem ? ' tr-step-problem' : ' tr-step-active';
+    const icon = (allDone || idx < step) ? '✓' : idx;
+    return `<div class="${cls}"><div class="tr-step-line"></div><div class="tr-step-circle">${icon}</div><div class="tr-step-label">${label}</div></div>`;
+  }).join('')}</div>`;
 }
 
 function updateTrkCards(list) {
   const total     = list.length;
-  const proses    = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'proses').length;
-  const undell    = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'undell').length;
-  const delivered = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'delivered').length;
-  const retur     = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'retur').length;
+  const proses    = list.filter(r => trCardState(trEffectiveStage(r)) === 'proses').length;
+  const undell    = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
+  const delivered = list.filter(r => trCardState(trEffectiveStage(r)) === 'delivered').length;
+  const retur     = list.filter(r => trCardState(trEffectiveStage(r)) === 'retur').length;
   document.getElementById('trk-total').textContent     = total     || '—';
   document.getElementById('trk-proses').textContent    = proses    || '—';
   document.getElementById('trk-undell').textContent    = undell    || '—';
@@ -1696,9 +1845,9 @@ function showTrkAlerts(list) {
 
   const alerts = [];
 
-  const undellCount = list.filter(r => getTrkStatusCategory(r.status_akhir) === 'undell').length;
+  const undellCount = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
   if (undellCount > 0) {
-    alerts.push(`<div class="trk-alert trk-alert-warn">⚠️ <strong>${undellCount} paket</strong> berstatus Undell — segera hubungi customer untuk konfirmasi pengiriman ulang.</div>`);
+    alerts.push(`<div class="trk-alert trk-alert-warn">⚠️ <strong>${undellCount} paket</strong> berstatus Bermasalah — segera hubungi customer untuk konfirmasi pengiriman ulang.</div>`);
   }
 
   // On Proses > 7 hari
@@ -1706,7 +1855,7 @@ function showTrkAlerts(list) {
   cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
   const oldProses = list.filter(r =>
-    getTrkStatusCategory(r.status_akhir) === 'proses' &&
+    trCardState(trEffectiveStage(r)) === 'proses' &&
     r.tanggal && r.tanggal < cutoffStr
   ).length;
   if (oldProses > 0) {
@@ -1727,11 +1876,10 @@ function renderTrkTable(list) {
     const eks       = extractEkspedisi(r.pembayaran) || r.pembayaran || '—';
     const hp08      = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
     const resiHtml  = r.resi
-      ? `<a href="https://cekresi.com/?noresi=${encodeURIComponent(r.resi)}" target="_blank" rel="noopener" class="trk-resi-link">${r.resi} ↗</a>`
+      ? `<a href="#" onclick="event.stopPropagation();trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" class="trk-resi-link">${r.resi} ↗</a>`
       : '<span style="color:var(--muted)">—</span>';
-    const statusBadge = getTrkStatusBadge(r.status_akhir);
 
-    return `<tr>
+    return `<tr${r.resi ? ` style="cursor:pointer" onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')"` : ''}>
       <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.tanggal || '—'}</td>
       <td title="${r.nama || ''}">${r.nama || '—'}</td>
       <td style="font-family:var(--mono);font-size:12px">${hp08}</td>
@@ -1740,7 +1888,7 @@ function renderTrkTable(list) {
       <td style="font-family:var(--mono);font-size:11px">${resiHtml}</td>
       <td style="font-size:12px">${r.jumlah || '—'}</td>
       <td style="font-size:12px">${r.kabupaten || '—'}</td>
-      <td>${statusBadge}</td>
+      <td>${trBadgeHtml(r)}</td>
     </tr>`;
   }).join('');
 }
@@ -1755,13 +1903,12 @@ function renderTrkCards(list) {
   wrap.innerHTML = list.map(r => {
     const eks      = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
     const hp08     = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
-    const cat      = getTrkStatusCategory(r.status_akhir);
+    const cat      = trCardState(trEffectiveStage(r));
     const cardCls  = cat === 'delivered' ? 'oc-kirim' : cat === 'retur' ? 'oc-rts' : cat === 'undell' ? 'oc-hold' : '';
-    const badge    = getTrkStatusBadge(r.status_akhir);
     const resiPart = r.resi
-      ? `<a href="https://cekresi.com/?noresi=${encodeURIComponent(r.resi)}" target="_blank" rel="noopener" class="trk-resi-link" style="font-size:11px">${r.resi} ↗</a>`
+      ? `<span class="trk-resi-link" style="font-size:11px">${r.resi} ↗</span>`
       : '<span style="color:var(--muted);font-size:11px">Belum ada resi</span>';
-    return `<div class="order-card ${cardCls}">
+    return `<div class="order-card ${cardCls}"${r.resi ? ` onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" style="cursor:pointer"` : ''}>
       <div class="oc-header">
         <span class="oc-nama">${r.nama || '—'}</span>
         <span class="oc-waktu">${r.tanggal || ''}</span>
@@ -1772,10 +1919,114 @@ function renderTrkCards(list) {
         <span style="font-size:12px">${eks}</span>
       </div>
       <div class="oc-row" style="margin-top:2px">${resiPart}</div>
+      ${trStepperHtml(r)}
       <div class="oc-footer">
         <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
-        ${badge}
+        ${trBadgeHtml(r)}
       </div>
     </div>`;
   }).join('');
+}
+
+// ── MODAL DETAIL RESI ─────────────────────────────────────────────────────────
+let trModalResi = null;
+
+function trOpenDetail(resi) {
+  const row = trkAllData.find(r => r.resi === resi);
+  if (!row) return;
+  trModalResi = resi;
+
+  const eks = extractEkspedisi(row.pembayaran) || row.pembayaran || '';
+  document.getElementById('tr-modal-title').textContent = row.nama || 'Detail Pengiriman';
+  document.getElementById('tr-modal-sub').textContent = (row.resi ? row.resi + ' · ' : '') + eks;
+
+  const detail  = row.status_resi_detail || null;
+  const history = detail && Array.isArray(detail.history) ? detail.history.slice().reverse() : [];
+  const meta    = TR_STAGE_META[trEffectiveStage(row)];
+
+  let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
+  if (history.length) {
+    historyHtml = `<div style="margin-top:14px">${history.map((h,i) => `
+      <div class="tr-history-item">
+        <div class="tr-history-dot" style="background:${i===0 ? meta.color : 'var(--border-strong)'}"></div>
+        <div>
+          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.desc || h.content || h.content2 || '-')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${h.date || ''}${h.location_name ? ' · '+h.location_name : ''}</div>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  document.getElementById('tr-modal-body').innerHTML = `
+    <div style="margin-top:10px">${trBadgeHtml(row)}</div>
+    ${trStepperHtml(row)}
+    ${historyHtml}
+  `;
+  document.getElementById('tr-modal').style.display = 'flex';
+}
+
+function trCloseModal() {
+  document.getElementById('tr-modal').style.display = 'none';
+  trModalResi = null;
+}
+
+async function trSaveTracking(resi, ekspedisi, result) {
+  await sb.from('cs_order_tracking').upsert({
+    resi,
+    ekspedisi,
+    status_resi: result.stage,
+    status_resi_step: result.step,
+    status_resi_updated_at: new Date().toISOString(),
+    status_resi_detail: result.detail
+  }, { onConflict: 'resi' });
+}
+
+async function trManualCheckFromModal() {
+  const row = trkAllData.find(r => r.resi === trModalResi);
+  if (!row) return;
+  if (!row.resi) { showToast('Belum ada resi untuk order ini.', 'error'); return; }
+  const eks = extractEkspedisi(row.pembayaran) || row.pembayaran;
+  const result = await checkResiTracking(row.resi, eks);
+  if (!result) { showToast('Gagal cek resi — pastikan ekspedisi terisi & resi valid.', 'error'); return; }
+  await trSaveTracking(row.resi, eks, result);
+  row.status_resi            = result.stage;
+  row.status_resi_step       = result.step;
+  row.status_resi_updated_at = new Date().toISOString();
+  row.status_resi_detail     = result.detail;
+  trOpenDetail(row.resi);
+  updateTrkCards(trkAllData);
+  applyTrkFilter();
+}
+
+async function trRefreshAll() {
+  const btns = ['trk-refresh-all-btn', 'trk-refresh-all-btn-mobile']
+    .map(id => document.getElementById(id)).filter(Boolean);
+  if (!btns.length) return;
+  const origLabel = btns[0].textContent;
+  btns.forEach(b => b.disabled = true);
+  try {
+    const targets = trkAllData.filter(r => r.resi && r.status_resi !== 'SAMPAI' && r.status_resi !== 'RETUR');
+    if (!targets.length) { showToast('Tidak ada resi yang perlu dicek.', 'info'); return; }
+    const BATCH = 5;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      const batch = targets.slice(i, i + BATCH);
+      await Promise.all(batch.map(async row => {
+        const eks = extractEkspedisi(row.pembayaran) || row.pembayaran;
+        const result = await checkResiTracking(row.resi, eks);
+        if (!result) return;
+        await trSaveTracking(row.resi, eks, result);
+        row.status_resi            = result.stage;
+        row.status_resi_step       = result.step;
+        row.status_resi_updated_at = new Date().toISOString();
+        row.status_resi_detail     = result.detail;
+      }));
+      const progress = `Mengecek... (${Math.min(i+BATCH, targets.length)}/${targets.length})`;
+      btns.forEach(b => b.textContent = progress);
+    }
+    updateTrkCards(trkAllData);
+    showTrkAlerts(trkAllData);
+    applyTrkFilter();
+    showToast(`✅ Selesai cek ${targets.length} resi!`, 'success');
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.textContent = origLabel; });
+  }
 }

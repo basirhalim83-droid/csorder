@@ -498,10 +498,14 @@ Keterangan: Bonus masker"></textarea>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <select id="trk-filter-status" class="trk-select" onchange="applyTrkFilter()">
         <option value="">Semua Status</option>
-        <option value="proses">On Proses</option>
-        <option value="undell">Undell</option>
-        <option value="delivered">Delivered</option>
-        <option value="retur">Retur</option>
+        <option value="MENUNGGU_RESI">⏳ Menunggu Resi</option>
+        <option value="BELUM_DICEK">🔍 Belum Dicek</option>
+        <option value="DIKIRIM">🚚 Dikirim</option>
+        <option value="KOTA_TUJUAN">🏙️ Kota Tujuan</option>
+        <option value="OTW">🛵 OTW</option>
+        <option value="SAMPAI">✅ Sampai</option>
+        <option value="BERMASALAH">⚠️ Bermasalah</option>
+        <option value="RETUR">↩️ Retur</option>
       </select>
       <select id="trk-filter-eks" class="trk-select" onchange="applyTrkFilter()">
         <option value="">Semua Ekspedisi</option>
@@ -539,17 +543,23 @@ Keterangan: Bonus masker"></textarea>
           </tbody>
         </table>
       </div>
-      <div style="padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;justify-content:space-between;align-items:center">
+      <div style="padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;justify-content:space-between;align-items:center;gap:8px">
         <span id="trk-info">—</span>
-        <button class="btn-secondary" onclick="loadTracking()" style="font-size:11px;padding:5px 10px">🔄 Refresh</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" id="trk-refresh-all-btn" onclick="trRefreshAll()" style="font-size:11px;padding:5px 10px">📡 Refresh Semua</button>
+          <button class="btn-secondary" onclick="loadTracking()" style="font-size:11px;padding:5px 10px">🔄 Refresh</button>
+        </div>
       </div>
     </div>
 
     <!-- Mobile: card view -->
     <div class="order-cards-wrap">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
         <span id="trk-info-mobile" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</span>
-        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" id="trk-refresh-all-btn-mobile" onclick="trRefreshAll()" style="font-size:12px;padding:7px 12px">📡 Refresh Semua</button>
+          <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
+        </div>
       </div>
       <div id="trk-cards"></div>
     </div>
@@ -620,6 +630,23 @@ Keterangan: Bonus masker"></textarea>
     <div class="confirm-actions">
       <button class="confirm-btn-batal" onclick="confirmSubmitCancel()">Cek Lagi</button>
       <button class="confirm-btn-ok" onclick="confirmSubmitOk()">Tetap Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Tracking Resi Modal -->
+<div class="tr-modal-overlay" id="tr-modal" style="display:none" onclick="if(event.target===this)trCloseModal()">
+  <div class="tr-modal-box">
+    <div class="tr-modal-head">
+      <div>
+        <div class="tr-modal-title" id="tr-modal-title">Detail Pengiriman</div>
+        <div class="tr-modal-sub" id="tr-modal-sub"></div>
+      </div>
+      <button class="tr-modal-close" onclick="trCloseModal()">✕</button>
+    </div>
+    <div id="tr-modal-body"></div>
+    <div class="tr-modal-actions">
+      <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
     </div>
   </div>
 </div>

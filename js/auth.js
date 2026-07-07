@@ -121,3 +121,28 @@ function normalizeHP(hp) {
 // -- Allow SPV/admin read all (set via Supabase service role or separate policy)
 // CREATE POLICY "all_orderan_read" ON all_orderan FOR SELECT TO authenticated USING (true);
 // CREATE POLICY "all_rts_read"     ON all_rts     FOR SELECT TO authenticated USING (true);
+//
+// -- Tabel hasil tracking resi live (Tracking Order) — diisi oleh api/cron-check-resi.js
+// -- dan tombol "Cek Ulang"/"Refresh Semua" di halaman Tracking Order
+// CREATE TABLE IF NOT EXISTS cs_order_tracking (
+//   resi text PRIMARY KEY,
+//   ekspedisi text,
+//   status_resi text,
+//   status_resi_step int,
+//   status_resi_updated_at timestamptz,
+//   status_resi_detail jsonb,
+//   created_at timestamptz DEFAULT now()
+// );
+// ALTER TABLE cs_order_tracking ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "cs_order_tracking_read"  ON cs_order_tracking FOR SELECT TO authenticated USING (true);
+// CREATE POLICY "cs_order_tracking_write" ON cs_order_tracking FOR ALL    TO authenticated USING (true);
+//
+// -- Env var tambahan yang perlu diset di Vercel:
+// -- CRON_SECRET            = token rahasia buat auth cron (dipakai api/cron-check-resi.js)
+// -- SUPABASE_URL           = URL project Supabase (sudah dipakai api/notif.js)
+// -- SUPABASE_SERVICE_KEY   = service role key Supabase (sudah dipakai api/notif.js)
+// --
+// -- Setelah deploy, setup cron eksternal (mis. cron-job.org) tiap 3-4 jam hit:
+// --   GET/POST https://<domain>/api/cron-check-resi
+// --   Header: Authorization: Bearer <CRON_SECRET>
+// -- (Vercel Hobby plan cron native cuma 1x/hari — sama pola dengan adsycrm-main)
