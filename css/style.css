@@ -444,3 +444,15 @@ tr.row-rts{background:var(--warn-light)!important}
 .tr-modal-close:hover{background:var(--bg);color:var(--text)}
 .tr-modal-actions{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
 .tr-modal-actions .btn-secondary{width:100%;text-align:center;padding:10px}
+
+.tr-stat-clickable{cursor:pointer;transition:box-shadow .15s, transform .15s}
+.tr-stat-clickable:hover{box-shadow:var(--shadow-md)}
+.tr-stat-clickable.tr-stat-active{box-shadow:0 0 0 2px var(--accent) inset}
+
+.tr-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.tr-tab{padding:7px 14px;border-radius:99px;border:1.5px solid var(--border-strong);font-size:12px;font-weight:600;color:var(--muted);background:var(--surface);cursor:pointer;transition:all .15s;white-space:nowrap}
+.tr-tab:hover{border-color:var(--accent)}
+.tr-tab.tr-tab-active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.trk-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:12px;align-items:start}
+.trk-grid .order-card{margin:0}
