@@ -1,4 +1,5 @@
 const { trackShipment, trackPos } = require('../lib/mengantar');
+const { sendFonnteWA } = require('../lib/fonnte');
 
 const COURIER_MAP = {
   'JNE':'JNE','JNT':'JT','SICEPAT':'SiCepat','LION':'lion',
@@ -140,6 +141,48 @@ async function checkOneResi(resi, ekspedisi) {
   }
 }
 
+const STAGE_LABEL = {
+  BERMASALAH: '⚠️ Bermasalah',
+  RETUR:      '↩️ Retur'
+};
+
+// Notif WA ke CS pemilik order pas resi-nya baru masuk status Bermasalah/Retur (bukan tiap cron jalan)
+async function notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, stage) {
+  let hp = (order.hp || '').replace(/\D/g, '');
+  if (!hp) return false;
+  const hp08 = hp.startsWith('0') ? hp : '0' + hp;
+  const tgl  = (order.tanggal || '').slice(0, 10);
+
+  const masukFilter = new URLSearchParams({
+    select: 'cs_id',
+    hp: `eq.${hp08}`,
+    tanggal: `eq.${tgl}`,
+    limit: '1'
+  });
+  const masukRes = await fetch(`${SUPABASE_URL}/rest/v1/orderan_masuk?${masukFilter.toString()}`, { headers: sbHeaders });
+  const masukRows = await masukRes.json();
+  const csId = Array.isArray(masukRows) && masukRows[0] ? masukRows[0].cs_id : null;
+  if (!csId) return false;
+
+  const profFilter = new URLSearchParams({ select: 'nama,no_wa', id: `eq.${csId}`, limit: '1' });
+  const profRes = await fetch(`${SUPABASE_URL}/rest/v1/cs_profiles?${profFilter.toString()}`, { headers: sbHeaders });
+  const profRows = await profRes.json();
+  const profile = Array.isArray(profRows) ? profRows[0] : null;
+  if (!profile || !profile.no_wa) return false;
+
+  const msg =
+    `⚠️ *CS Input — Tracking Order*\n\n` +
+    `Halo ${profile.nama || 'CS'} 👋\n` +
+    `Order kamu berubah status jadi *${STAGE_LABEL[stage] || stage}*:\n\n` +
+    `👤 Nama : ${order.nama || '—'}\n` +
+    `📱 HP   : ${hp08}\n` +
+    `📦 Resi : ${resi}\n\n` +
+    `Mohon segera cek & follow up ke customer ya.\nTerima Kasih 🙏`;
+
+  await sendFonnteWA(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, profile.no_wa, msg);
+  return true;
+}
+
 module.exports = async function handler(req, res) {
   const secret = req.query.secret || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -155,12 +198,12 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json'
   };
 
-  let checked = 0, updated = 0, errors = 0;
+  let checked = 0, updated = 0, errors = 0, notified = 0;
 
   try {
     // 1. Ambil kandidat resi dari all_orderan (order masuk lewat csorder-main)
     const candFilter = new URLSearchParams({
-      select: 'resi,pembayaran',
+      select: 'resi,pembayaran,hp,tanggal,nama',
       sumber: 'eq.cs_input',
       resi: 'not.is.null',
       order: 'id',
@@ -170,48 +213,48 @@ module.exports = async function handler(req, res) {
     const candidates = await candRes.json();
     if (!Array.isArray(candidates)) throw new Error('Gagal ambil data all_orderan: ' + JSON.stringify(candidates));
 
-    // Dedup by resi, derive ekspedisi dari pembayaran
+    // Dedup by resi, simpan info order buat notif nanti
     const byResi = {};
     candidates.forEach(c => {
       const resi = (c.resi || '').trim();
       if (!resi || byResi[resi]) return;
-      byResi[resi] = extractEkspedisi(c.pembayaran || '');
+      byResi[resi] = {
+        ekspedisi: extractEkspedisi(c.pembayaran || ''),
+        hp: c.hp, tanggal: c.tanggal, nama: c.nama
+      };
     });
     const resiList = Object.keys(byResi);
     if (!resiList.length) {
-      res.status(200).json({ checked, updated, errors, rows_this_run: 0 });
+      res.status(200).json({ checked, updated, errors, notified, rows_this_run: 0 });
       return;
     }
 
-    // 2. Ambil status existing, skip yang udah final
+    // 2. Ambil status existing, skip yang udah final, ingat status sebelumnya buat deteksi transisi
     const existFilter = new URLSearchParams({
       select: 'resi,status_resi',
       resi: `in.(${resiList.map(r => `"${r.replace(/"/g,'')}"`).join(',')})`
     });
     const existRes = await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?${existFilter.toString()}`, { headers: sbHeaders });
     const existing = await existRes.json();
-    const finalSet = new Set(
-      (Array.isArray(existing) ? existing : [])
-        .filter(r => r.status_resi === 'SAMPAI' || r.status_resi === 'RETUR')
-        .map(r => r.resi)
-    );
+    const prevStatusMap = {};
+    (Array.isArray(existing) ? existing : []).forEach(r => { prevStatusMap[r.resi] = r.status_resi; });
 
-    const targets = resiList.filter(r => !finalSet.has(r));
+    const targets = resiList.filter(r => prevStatusMap[r] !== 'SAMPAI' && prevStatusMap[r] !== 'RETUR');
 
     for (let i = 0; i < targets.length; i += CONCURRENCY) {
       const batch = targets.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async resi => {
         try {
           checked++;
-          const ekspedisi = byResi[resi];
-          const result = await checkOneResi(resi, ekspedisi);
+          const order = byResi[resi];
+          const result = await checkOneResi(resi, order.ekspedisi);
           if (!result) return;
           await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?on_conflict=resi`, {
             method: 'POST',
             headers: { ...sbHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
             body: JSON.stringify({
               resi,
-              ekspedisi,
+              ekspedisi: order.ekspedisi,
               status_resi: result.stage,
               status_resi_step: result.step,
               status_resi_updated_at: new Date().toISOString(),
@@ -219,14 +262,23 @@ module.exports = async function handler(req, res) {
             })
           });
           updated++;
+
+          // Notif WA cuma pas BARU masuk status Bermasalah/Retur (bukan tiap re-check status yang sama)
+          const isProblem = result.stage === 'BERMASALAH' || result.stage === 'RETUR';
+          if (isProblem && result.stage !== prevStatusMap[resi]) {
+            try {
+              const sent = await notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, result.stage);
+              if (sent) notified++;
+            } catch (e) { /* notif gagal, tracking tetap kesimpan */ }
+          }
         } catch (e) {
           errors++;
         }
       }));
     }
 
-    res.status(200).json({ checked, updated, errors, rows_this_run: targets.length });
+    res.status(200).json({ checked, updated, errors, notified, rows_this_run: targets.length });
   } catch (e) {
-    res.status(500).json({ error: e.message, checked, updated, errors });
+    res.status(500).json({ error: e.message, checked, updated, errors, notified });
   }
 };
