@@ -184,6 +184,12 @@ function drpNav(dir) {
   document.getElementById('mobile-avatar').textContent     = nama.charAt(0).toUpperCase();
   document.getElementById('topbar-date').textContent       = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
+  // Link Admin Panel cuma muncul buat role admin
+  if (currentProfile.role === 'admin') {
+    const navAdmin = document.getElementById('nav-admin');
+    if (navAdmin) navAdmin.style.display = 'flex';
+  }
+
   // Restore theme
   if (localStorage.getItem('cs_theme') === 'dark') {
     document.documentElement.setAttribute('data-theme','dark');
