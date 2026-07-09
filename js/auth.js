@@ -6,6 +6,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── SUPABASE STORAGE (project terpisah khusus SS bukti) ───────────────────────
+const SS_SUPABASE_URL = 'https://ppryuktvzaboahcphqqg.supabase.co';
+const SS_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcnl1a3R2emFib2FoY3BocXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3ODQxNDMsImV4cCI6MjA5ODM2MDE0M30.MZJC-QAuxkTume3Zgy-5pOgDpwpsntbeeHRT-r8Nk18';
+const sbSS = createClient(SS_SUPABASE_URL, SS_SUPABASE_KEY);
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 async function signUp(email, password, nama, noWA) {
   const { data, error } = await sb.auth.signUp({

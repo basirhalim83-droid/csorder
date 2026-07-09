@@ -252,6 +252,144 @@ function buildValBadges(r) {
   return badges.join(' ');
 }
 
+// ── HELPER: Tombol Bukti SS ───────────────────────────────────────────────────
+function buildSSBtn(r) {
+  const needSS = r.is_dup_all || r.is_rts;
+  if (!needSS) return '<span style="color:var(--muted);font-size:11px">—</span>';
+  const existing = Array.isArray(r.ss_urls) ? r.ss_urls : [];
+  // Hitung berapa SS yang dibutuhkan vs sudah ada
+  const needIklan = r.is_dup_all;
+  const needDeal  = r.is_dup_all || r.is_rts;
+  const hasIklan  = existing.some(s => s.type === 'iklan');
+  const hasDeal   = existing.some(s => s.type === 'deal');
+  const allDone   = (!needIklan || hasIklan) && (!needDeal || hasDeal);
+  if (allDone) {
+    return `<button class="btn-ss btn-ss-done" onclick="openSSModal('${r.id}')">✅ Lihat Bukti</button>`;
+  }
+  return `<button class="btn-ss btn-ss-upload" onclick="openSSModal('${r.id}')">📎 Upload Bukti</button>`;
+}
+
+// ── SS MODAL ──────────────────────────────────────────────────────────────────
+const SS_BUCKET = 'ss-bukti';
+let ssCurrentOrder = null;
+let ssNewFiles = {}; // { iklan: Blob|null, deal: Blob|null }
+
+function openSSModal(orderId) {
+  ssCurrentOrder = todayOrders.find(o => o.id === orderId);
+  if (!ssCurrentOrder) return;
+  ssNewFiles = {};
+
+  const existing = Array.isArray(ssCurrentOrder.ss_urls) ? ssCurrentOrder.ss_urls : [];
+  const needIklan = ssCurrentOrder.is_dup_all;
+  const needDeal  = ssCurrentOrder.is_dup_all || ssCurrentOrder.is_rts;
+
+  document.getElementById('ss-modal-sub').textContent = ssCurrentOrder.nama || '';
+
+  let body = '';
+  if (needIklan) body += ssBuildSection('iklan', 'SS Customer Masuk Iklan', existing.find(s => s.type === 'iklan')?.url || null);
+  if (needDeal)  body += ssBuildSection('deal',  'SS Deal Customer',         existing.find(s => s.type === 'deal')?.url  || null);
+
+  document.getElementById('ss-modal-body').innerHTML = body;
+  document.getElementById('ss-modal').style.display  = 'flex';
+}
+
+function closeSSModal() {
+  document.getElementById('ss-modal').style.display = 'none';
+  ssCurrentOrder = null;
+  ssNewFiles = {};
+}
+
+function ssBuildSection(type, label, existingUrl) {
+  const existingHtml = existingUrl ? `
+    <div class="ss-existing-wrap">
+      <img src="${existingUrl}" class="ss-thumb" onclick="window.open('${existingUrl}','_blank')" title="Klik untuk buka">
+      <span class="ss-badge-done">✅ Sudah ada — klik gambar untuk buka</span>
+    </div>` : '';
+  return `
+  <div class="ss-section">
+    <div class="ss-section-label">${label}</div>
+    ${existingHtml}
+    <div id="ss-new-preview-${type}" class="ss-existing-wrap" style="display:none">
+      <img id="ss-new-img-${type}" class="ss-thumb">
+      <span class="ss-badge-new">📎 Siap diupload</span>
+    </div>
+    <label class="ss-pick-btn" for="ss-file-${type}">
+      ${existingUrl ? '🔄 Ganti SS' : '📎 Pilih Gambar'}
+    </label>
+    <input type="file" id="ss-file-${type}" accept="image/*" style="display:none" onchange="ssOnFileChange('${type}',this)">
+  </div>`;
+}
+
+async function ssOnFileChange(type, input) {
+  if (!input.files[0]) return;
+  const compressed = await ssCompress(input.files[0]);
+  ssNewFiles[type] = compressed;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById(`ss-new-img-${type}`).src = e.target.result;
+    document.getElementById(`ss-new-preview-${type}`).style.display = 'flex';
+  };
+  reader.readAsDataURL(compressed);
+}
+
+async function ssCompress(file, maxPx = 1200, quality = 0.75) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        const r = Math.min(maxPx / width, maxPx / height);
+        width = Math.round(width * r); height = Math.round(height * r);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+async function ssSave() {
+  if (!ssCurrentOrder) return;
+  const btn = document.getElementById('ss-save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
+  try {
+    const existing = Array.isArray(ssCurrentOrder.ss_urls) ? [...ssCurrentOrder.ss_urls] : [];
+    const newUrls  = [...existing];
+
+    for (const [type, blob] of Object.entries(ssNewFiles)) {
+      if (!blob) continue;
+      const path = `${ssCurrentOrder.id}/${type}_${Date.now()}.jpg`;
+      const { error: upErr } = await sbSS.storage.from(SS_BUCKET).upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = sbSS.storage.from(SS_BUCKET).getPublicUrl(path);
+      const idx = newUrls.findIndex(s => s.type === type);
+      if (idx >= 0) newUrls[idx] = { type, url: publicUrl };
+      else newUrls.push({ type, url: publicUrl });
+    }
+
+    const { error } = await sb.from('orderan_masuk').update({ ss_urls: newUrls }).eq('id', ssCurrentOrder.id);
+    if (error) throw error;
+
+    // Update local state supaya tombol langsung berubah tanpa reload
+    const idx = todayOrders.findIndex(o => o.id === ssCurrentOrder.id);
+    if (idx >= 0) todayOrders[idx].ss_urls = newUrls;
+
+    closeSSModal();
+    renderDashTable(todayOrders);
+    renderOrderCards(todayOrders);
+    showToast('Bukti SS berhasil disimpan!', 'success');
+  } catch (e) {
+    showToast('Gagal simpan: ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Simpan';
+  }
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   if (!currentUser) return;
@@ -323,7 +461,7 @@ async function loadDashboardAlerts(masukList) {
 function renderDashTable(orders) {
   const tbody = document.getElementById('dash-tbody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Belum ada orderan hari ini. Yuk mulai input!</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Belum ada orderan hari ini. Yuk mulai input!</td></tr>';
     return;
   }
   tbody.innerHTML = orders.map((r, i) => {
@@ -343,6 +481,7 @@ function renderDashTable(orders) {
       : r.acc_spv;
 
     const waktu = new Date(r.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    const ssBtn  = buildSSBtn(r);
 
     return `<tr class="${rowClass}">
       <td style="font-family:var(--mono);color:var(--muted)">${i+1}</td>
@@ -355,6 +494,7 @@ function renderDashTable(orders) {
       <td>${valBadge}</td>
       <td>${accBadge}</td>
       <td style="color:var(--muted);font-size:11px" title="${r.noted||''}">${r.noted||'—'}</td>
+      <td>${ssBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -384,6 +524,7 @@ function renderOrderCards(orders) {
 
     const waktu = new Date(r.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
     const total = r.total_pembayaran ? 'Rp'+Number(r.total_pembayaran).toLocaleString('id-ID') : '—';
+    const ssBtn = buildSSBtn(r);
 
     return `<div class="order-card ${cardClass}">
       <div class="oc-header">
@@ -401,9 +542,10 @@ function renderOrderCards(orders) {
       </div>
       <div class="oc-footer">
         <span class="oc-noted">${r.noted ? '📝 '+r.noted : ''}</span>
-        <div style="display:flex;gap:4px;flex-shrink:0">
+        <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
           ${valBadge}
           ${accBadge}
+          ${ssBtn}
         </div>
       </div>
     </div>`;
