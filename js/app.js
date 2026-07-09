@@ -461,7 +461,7 @@ async function loadDashboardAlerts(masukList) {
 function renderDashTable(orders) {
   const tbody = document.getElementById('dash-tbody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Belum ada orderan hari ini. Yuk mulai input!</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Belum ada orderan hari ini. Yuk mulai input!</td></tr>';
     return;
   }
   tbody.innerHTML = orders.map((r, i) => {
@@ -471,7 +471,8 @@ function renderDashTable(orders) {
       : r.is_dup_today         ? 'row-dup'
       : r.is_rts               ? 'row-rts' : '';
 
-    const valBadge = buildValBadges(r);
+    const valBadge   = buildValBadges(r);
+    const gradeBadge = buildGradeBadge(r);
 
     const accBadge = !r.acc_spv
       ? '<span class="badge badge-pending">Menunggu</span>'
@@ -492,6 +493,7 @@ function renderDashTable(orders) {
       <td>${r.pembayaran||'—'}</td>
       <td style="font-family:var(--mono)">Rp${Number(r.total_pembayaran||0).toLocaleString('id-ID')}</td>
       <td>${valBadge}</td>
+      <td>${gradeBadge}</td>
       <td>${accBadge}</td>
       <td style="color:var(--muted);font-size:11px" title="${r.noted||''}">${r.noted||'—'}</td>
       <td>${ssBtn}</td>
@@ -513,7 +515,8 @@ function renderOrderCards(orders) {
       : r.is_dup_today         ? 'oc-dup'
       : r.is_rts               ? 'oc-rts' : '';
 
-    const valBadge = buildValBadges(r);
+    const valBadge   = buildValBadges(r);
+    const gradeBadge = buildGradeBadge(r);
 
     const accBadge = !r.acc_spv
       ? '<span class="badge badge-pending">Menunggu SPV</span>'
@@ -542,8 +545,9 @@ function renderOrderCards(orders) {
       </div>
       <div class="oc-footer">
         <span class="oc-noted">${r.noted ? '📝 '+r.noted : ''}</span>
-        <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
+        <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;flex-wrap:wrap">
           ${valBadge}
+          ${gradeBadge}
           ${accBadge}
           ${ssBtn}
         </div>
@@ -1068,9 +1072,10 @@ async function validateReceiverScore() {
   } catch(_) { /* gagal cek grade → jangan blokir input CS */ }
 }
 
-function showGradeDetail() {
-  if (!lastReceiverScore) return;
-  const rows = [...lastReceiverScore.couriers]
+function showGradeDetail(score) {
+  const s = score || lastReceiverScore;
+  if (!s) return;
+  const rows = [...s.couriers]
     .sort((a, b) => b.total - a.total)
     .map(c => `
       <tr>
@@ -1093,8 +1098,18 @@ function showGradeDetail() {
       <tbody>${rows}</tbody>
     </table>`;
   document.getElementById('grade-modal-sub').textContent =
-    `Grade ≈${lastReceiverScore.grade} — rata-rata skor ${lastReceiverScore.avgRate.toFixed(1)}/10 dari ${lastReceiverScore.totalOrder} order`;
+    `Grade ≈${s.grade} — rata-rata skor ${s.avgRate.toFixed(1)}/10 dari ${s.totalOrder} order`;
   document.getElementById('grade-modal').style.display = 'flex';
+}
+
+// ── HELPER: Badge Grade utk tabel/kartu Dashboard ─────────────────────────────
+const dashGradeCache = {}; // id order -> receiver_score, dipakai onclick badge buat buka modal detail
+function buildGradeBadge(r) {
+  const s = r.receiver_score;
+  if (!s || !s.grade) return '<span class="badge" style="opacity:.5">—</span>';
+  dashGradeCache[r.id] = s;
+  const cls = (s.grade === 'A' || s.grade === 'B') ? 'badge-ok' : s.grade === 'C' ? 'badge-warn' : 'badge-rts';
+  return `<span class="badge ${cls}" style="cursor:pointer" onclick="showGradeDetail(dashGradeCache['${r.id}'])">≈${s.grade} (${(s.avgRate || 0).toFixed(1)})</span>`;
 }
 function closeGradeModal() {
   document.getElementById('grade-modal').style.display = 'none';
@@ -1341,7 +1356,7 @@ async function doSubmitExec() {
       rts_detail        : isRTSFinal       ? rtsData    : null,
       kp_stat           : kpStat           ? { total: kpStat.total, retur: kpStat.retur, pct: kpStat.pct } : null,
       eks_detail        : rekEkspedisi     ? { dipakai: usedEks, rekomendasi: rekEkspedisi, status: eksColor } : null,
-      receiver_score    : lastReceiverScore ? { grade: lastReceiverScore.grade, avg_rate: lastReceiverScore.avgRate, total_order: lastReceiverScore.totalOrder, couriers: lastReceiverScore.couriers } : null,
+      receiver_score    : lastReceiverScore || null,
     };
 
     await sb.from('orderan_masuk').update(valUpdate).eq('id', insertedId);
