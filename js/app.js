@@ -667,6 +667,7 @@ async function doParse() {
     validateEkspedisi();
     validateRincian();
     validateSKU();
+    validateReceiverScore();
 
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch(e) {
@@ -1009,12 +1010,106 @@ function validateRincian() {
   }
 }
 
+// ── GRADE / SKOR PENERIMA (Mengantar) ──────────────────────────────────────────
+let lastReceiverScore = null; // dikirim ke orderan_masuk pas submit
+
+function summarizeReceiverScore(data) {
+  const meta = new Set(['_id', 'phone', 'createdAt', 'updatedAt']);
+  const couriers = Object.keys(data)
+    .filter(k => !meta.has(k) && data[k] && typeof data[k].total === 'number')
+    .map(k => ({ nama: k, ...data[k] }));
+
+  let totalOrder = 0, weightedRate = 0;
+  couriers.forEach(c => {
+    totalOrder   += c.total || 0;
+    weightedRate += (c.total || 0) * (c.rate || 0);
+  });
+
+  const avgRate = totalOrder > 0 ? weightedRate / totalOrder : null;
+  const grade   = avgRate === null ? null
+    : avgRate >= 9 ? 'A' : avgRate >= 7 ? 'B' : avgRate >= 5 ? 'C' : 'D';
+
+  return { totalOrder, avgRate, grade, couriers };
+}
+
+async function validateReceiverScore() {
+  const hint = document.getElementById('hint-hp');
+  lastReceiverScore = null;
+  if (hint) { hint.className = 'val-hint'; hint.innerHTML = ''; }
+  document.getElementById('f-hp')?.classList.remove('val-ok', 'val-err', 'val-warn');
+
+  const hpNorm = normalizeHP(document.getElementById('f-hp')?.value || '');
+  const phone  = hpNorm.startsWith('0') ? hpNorm.slice(1) : hpNorm;
+  if (phone.length < 8) return;
+
+  try {
+    const res  = await fetch(`/api/grade?phone=${encodeURIComponent(phone)}`);
+    const json = await res.json();
+    if (!json.success || !json.data) {
+      valSetField('hp', 'ok', 'ℹ️ Belum ada histori Mengantar (customer baru)');
+      return;
+    }
+
+    const summary = summarizeReceiverScore(json.data);
+    if (!summary.totalOrder) {
+      valSetField('hp', 'ok', 'ℹ️ Belum ada histori Mengantar (customer baru)');
+      return;
+    }
+    lastReceiverScore = summary;
+
+    const state = (summary.grade === 'A' || summary.grade === 'B') ? 'ok'
+      : summary.grade === 'C' ? 'warn' : 'err';
+    valSetField('hp', state, `Grade ${summary.grade} — Skor ${summary.avgRate.toFixed(1)}/10 (${summary.totalOrder} order)`);
+    // valSetField pakai textContent utk state ok/err, jadi tombol ditambah manual lewat innerHTML di sini
+    const hintEl = document.getElementById('hint-hp');
+    if (hintEl) hintEl.innerHTML += ` <button class="hint-apply" onclick="showGradeDetail()">Detail</button>`;
+  } catch(_) { /* gagal cek grade → jangan blokir input CS */ }
+}
+
+function showGradeDetail() {
+  if (!lastReceiverScore) return;
+  const rows = [...lastReceiverScore.couriers]
+    .sort((a, b) => b.total - a.total)
+    .map(c => `
+      <tr>
+        <td>${c.nama}</td>
+        <td style="text-align:center">${c.total}</td>
+        <td style="text-align:center">${c.delivered ?? 0}</td>
+        <td style="text-align:center">${c.rts ?? 0}</td>
+        <td style="text-align:center">${c.undelivered ?? 0}</td>
+        <td style="text-align:center">${(c.rate || 0).toFixed(1)}</td>
+      </tr>`).join('');
+
+  document.getElementById('grade-modal-body').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead>
+        <tr>
+          <th style="text-align:left">Ekspedisi</th><th>Total</th><th>Sampai</th><th>RTS</th><th>Gagal</th><th>Skor</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.getElementById('grade-modal-sub').textContent =
+    `Grade ${lastReceiverScore.grade} — rata-rata skor ${lastReceiverScore.avgRate.toFixed(1)}/10 dari ${lastReceiverScore.totalOrder} order`;
+  document.getElementById('grade-modal').style.display = 'flex';
+}
+function closeGradeModal() {
+  document.getElementById('grade-modal').style.display = 'none';
+}
+
 // Re-validasi saat CS edit manual — debounce 800ms
 let _valTimer = null;
 function scheduleValidasi() {
   clearTimeout(_valTimer);
   _valTimer = setTimeout(() => validateWilayah(), 800);
 }
+let _gradeTimer = null;
+function scheduleGradeCheck() {
+  clearTimeout(_gradeTimer);
+  _gradeTimer = setTimeout(() => validateReceiverScore(), 800);
+}
+
+document.getElementById('f-hp')?.addEventListener('input', scheduleGradeCheck);
 
 ['f-kelurahan','f-kecamatan','f-kabupaten','f-provinsi','f-kodepos'].forEach(id => {
   const el = document.getElementById(id);
@@ -1243,6 +1338,7 @@ async function doSubmitExec() {
       rts_detail        : isRTSFinal       ? rtsData    : null,
       kp_stat           : kpStat           ? { total: kpStat.total, retur: kpStat.retur, pct: kpStat.pct } : null,
       eks_detail        : rekEkspedisi     ? { dipakai: usedEks, rekomendasi: rekEkspedisi, status: eksColor } : null,
+      receiver_score    : lastReceiverScore ? { grade: lastReceiverScore.grade, avg_rate: lastReceiverScore.avgRate, total_order: lastReceiverScore.totalOrder, couriers: lastReceiverScore.couriers } : null,
     };
 
     await sb.from('orderan_masuk').update(valUpdate).eq('id', insertedId);
@@ -1255,6 +1351,8 @@ async function doSubmitExec() {
     if (isWajibTransfer)   masalah.push('🚫 WAJIB TRANSFER — customer sudah RTS ' + rtsCount + 'x, tidak boleh COD');
     if (isWilayahRawan)    masalah.push('📍 WILAYAH ' + kpStatus + ' — ' + kpPct + '% RTS (' + kpStat.retur + '/' + kpStat.total + ' order historis)');
     if (isEkspedisiWrong)  masalah.push('🚚 EKSPEDISI ' + (eksColor === 'red' ? 'TIDAK DIREKOMENDASIKAN' : 'BUKAN TERBAIK') + ' — rekomendasi: ' + rekEkspedisi);
+    const isGradeBuruk = lastReceiverScore && lastReceiverScore.grade === 'D';
+    if (isGradeBuruk)      masalah.push('⚙️ SKOR PENERIMA RENDAH — Grade D (' + lastReceiverScore.avgRate.toFixed(1) + '/10) dari ' + lastReceiverScore.totalOrder + ' order historis Mengantar');
 
     if (masalah.length > 0 && profile.no_wa) {
       const csName = profile.nama || 'CS';
@@ -1314,6 +1412,13 @@ async function doSubmitExec() {
           `🚚 *EKSPEDISI ${eksLabel}*\n` +
           `   → Dipakai: ${usedEks || '—'}\n` +
           `   → Rekomendasi: ${rekEkspedisi}`
+        );
+      }
+
+      if (isGradeBuruk) {
+        flagLines.push(
+          `⚙️ *SKOR PENERIMA RENDAH (Grade D)*\n` +
+          `   → Skor ${lastReceiverScore.avgRate.toFixed(1)}/10 dari ${lastReceiverScore.totalOrder} order historis Mengantar`
         );
       }
 

@@ -127,6 +127,9 @@ function normalizeHP(hp) {
 // CREATE POLICY "all_orderan_read" ON all_orderan FOR SELECT TO authenticated USING (true);
 // CREATE POLICY "all_rts_read"     ON all_rts     FOR SELECT TO authenticated USING (true);
 //
+// -- Kolom Grade/Skor Penerima (Mengantar), diisi via api/grade.js + validateReceiverScore() di js/app.js
+// ALTER TABLE orderan_masuk ADD COLUMN IF NOT EXISTS receiver_score jsonb;
+//
 // -- Tabel hasil tracking resi live (Tracking Order) — diisi oleh api/cron-check-resi.js
 // -- dan tombol "Cek Ulang"/"Refresh Semua" di halaman Tracking Order
 // CREATE TABLE IF NOT EXISTS cs_order_tracking (
