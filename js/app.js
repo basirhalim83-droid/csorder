@@ -1013,21 +1013,23 @@ function validateRincian() {
 // ── GRADE / SKOR PENERIMA (Mengantar) ──────────────────────────────────────────
 let lastReceiverScore = null; // dikirim ke orderan_masuk pas submit
 
+function rateToGrade(rate) {
+  if (rate === null || rate === undefined) return null;
+  return rate >= 9 ? 'A' : rate >= 7 ? 'B' : rate >= 5 ? 'C' : 'D';
+}
+
 function summarizeReceiverScore(data) {
   const meta = new Set(['_id', 'phone', 'createdAt', 'updatedAt']);
   const couriers = Object.keys(data)
-    .filter(k => !meta.has(k) && data[k] && typeof data[k].total === 'number')
-    .map(k => ({ nama: k, ...data[k] }));
+    .filter(k => !meta.has(k) && data[k] && typeof data[k].total === 'number' && data[k].total > 0)
+    .map(k => ({ nama: k, ...data[k], grade: rateToGrade(data[k].rate) }));
 
-  let totalOrder = 0, weightedRate = 0;
-  couriers.forEach(c => {
-    totalOrder   += c.total || 0;
-    weightedRate += (c.total || 0) * (c.rate || 0);
-  });
-
-  const avgRate = totalOrder > 0 ? weightedRate / totalOrder : null;
-  const grade   = avgRate === null ? null
-    : avgRate >= 9 ? 'A' : avgRate >= 7 ? 'B' : avgRate >= 5 ? 'C' : 'D';
+  const totalOrder = couriers.reduce((sum, c) => sum + (c.total || 0), 0);
+  // Rata-rata sederhana antar ekspedisi yang ada histori — sama seperti "Average Score/Number" di dashboard Mengantar
+  const avgRate = couriers.length
+    ? couriers.reduce((sum, c) => sum + (c.rate || 0), 0) / couriers.length
+    : null;
+  const grade = rateToGrade(avgRate);
 
   return { totalOrder, avgRate, grade, couriers };
 }
@@ -1059,7 +1061,7 @@ async function validateReceiverScore() {
 
     const state = (summary.grade === 'A' || summary.grade === 'B') ? 'ok'
       : summary.grade === 'C' ? 'warn' : 'err';
-    valSetField('hp', state, `Grade ${summary.grade} — Skor ${summary.avgRate.toFixed(1)}/10 (${summary.totalOrder} order)`);
+    valSetField('hp', state, `Grade ≈${summary.grade} — Skor ${summary.avgRate.toFixed(1)}/10 (${summary.totalOrder} order)`);
     // valSetField pakai textContent utk state ok/err, jadi tombol ditambah manual lewat innerHTML di sini
     const hintEl = document.getElementById('hint-hp');
     if (hintEl) hintEl.innerHTML += ` <button class="hint-apply" onclick="showGradeDetail()">Detail</button>`;
@@ -1078,19 +1080,20 @@ function showGradeDetail() {
         <td style="text-align:center">${c.rts ?? 0}</td>
         <td style="text-align:center">${c.undelivered ?? 0}</td>
         <td style="text-align:center">${(c.rate || 0).toFixed(1)}</td>
+        <td style="text-align:center">≈${c.grade || '-'}</td>
       </tr>`).join('');
 
   document.getElementById('grade-modal-body').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.9rem">
       <thead>
         <tr>
-          <th style="text-align:left">Ekspedisi</th><th>Total</th><th>Sampai</th><th>RTS</th><th>Gagal</th><th>Skor</th>
+          <th style="text-align:left">Ekspedisi</th><th>Total</th><th>Sampai</th><th>RTS</th><th>Gagal</th><th>Skor</th><th>Grade</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
   document.getElementById('grade-modal-sub').textContent =
-    `Grade ${lastReceiverScore.grade} — rata-rata skor ${lastReceiverScore.avgRate.toFixed(1)}/10 dari ${lastReceiverScore.totalOrder} order`;
+    `Grade ≈${lastReceiverScore.grade} — rata-rata skor ${lastReceiverScore.avgRate.toFixed(1)}/10 dari ${lastReceiverScore.totalOrder} order`;
   document.getElementById('grade-modal').style.display = 'flex';
 }
 function closeGradeModal() {
