@@ -253,13 +253,26 @@ function buildValBadges(r) {
 }
 
 // ── HELPER: Tombol Bukti SS ───────────────────────────────────────────────────
+// Syarat wajib SS bukti — port dari isBadGradeRow() ValidasiOrder (`!grade || grade==='-' ||
+// /^[DE]/i` — grade kosong/'-' ITU JUGA dianggep rendah, bukan cuma D/E doang) + Wilayah Rawan
+// (keputusan user, sesi 2026-07-11: gak ada preseden di ValidasiOrder buat ini, sengaja
+// ditambahin di sini doang). csorder cuma punya A-D (gak ada E), grade kosong = customer belum
+// pernah order sama sekali di Mengantar (belum ada rekam jejak) — count sebagai rendah juga,
+// sama kayak "-" di ValidasiOrder. Semua kondisi (dup_all/rts/wilayah_rawan/grade
+// rendah-atau-kosong) cukup 1 bukti "deal" — numpuk >1 alasan bareng TETAP cuma 1 SS, bukan
+// nambah jenis baru per alasan. "iklan" tetap khusus dup_all doang (gak berubah).
+function ssNeeds(r) {
+  const grade      = r.receiver_score?.grade;
+  const isBadGrade = !grade || grade === 'D';
+  const needIklan  = r.is_dup_all;
+  const needDeal   = r.is_dup_all || r.is_rts || r.is_wilayah_rawan || isBadGrade;
+  return { needIklan, needDeal, needSS: needIklan || needDeal };
+}
+
 function buildSSBtn(r) {
-  const needSS = r.is_dup_all || r.is_rts;
+  const { needIklan, needDeal, needSS } = ssNeeds(r);
   if (!needSS) return '<span style="color:var(--muted);font-size:11px">—</span>';
   const existing = Array.isArray(r.ss_urls) ? r.ss_urls : [];
-  // Hitung berapa SS yang dibutuhkan vs sudah ada
-  const needIklan = r.is_dup_all;
-  const needDeal  = r.is_dup_all || r.is_rts;
   const hasIklan  = existing.some(s => s.type === 'iklan');
   const hasDeal   = existing.some(s => s.type === 'deal');
   const allDone   = (!needIklan || hasIklan) && (!needDeal || hasDeal);
@@ -280,8 +293,7 @@ function openSSModal(orderId) {
   ssNewFiles = {};
 
   const existing = Array.isArray(ssCurrentOrder.ss_urls) ? ssCurrentOrder.ss_urls : [];
-  const needIklan = ssCurrentOrder.is_dup_all;
-  const needDeal  = ssCurrentOrder.is_dup_all || ssCurrentOrder.is_rts;
+  const { needIklan, needDeal } = ssNeeds(ssCurrentOrder);
   const locked = checkSSLock();
 
   document.getElementById('ss-modal-sub').textContent = ssCurrentOrder.nama || '';
