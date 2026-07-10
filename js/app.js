@@ -282,15 +282,18 @@ function openSSModal(orderId) {
   const existing = Array.isArray(ssCurrentOrder.ss_urls) ? ssCurrentOrder.ss_urls : [];
   const needIklan = ssCurrentOrder.is_dup_all;
   const needDeal  = ssCurrentOrder.is_dup_all || ssCurrentOrder.is_rts;
+  const locked = checkSSLock();
 
   document.getElementById('ss-modal-sub').textContent = ssCurrentOrder.nama || '';
 
   let body = '';
-  if (needIklan) body += ssBuildSection('iklan', 'SS Customer Masuk Iklan', existing.find(s => s.type === 'iklan')?.url || null);
-  if (needDeal)  body += ssBuildSection('deal',  'SS Deal Customer',         existing.find(s => s.type === 'deal')?.url  || null);
+  if (needIklan) body += ssBuildSection('iklan', 'SS Customer Masuk Iklan', existing.find(s => s.type === 'iklan')?.url || null, locked);
+  if (needDeal)  body += ssBuildSection('deal',  'SS Deal Customer',         existing.find(s => s.type === 'deal')?.url  || null, locked);
 
   document.getElementById('ss-modal-body').innerHTML = body;
   document.getElementById('ss-modal').style.display  = 'flex';
+  const saveBtn = document.getElementById('ss-save-btn');
+  if (saveBtn) saveBtn.style.display = locked ? 'none' : '';
 }
 
 function closeSSModal() {
@@ -299,24 +302,31 @@ function closeSSModal() {
   ssNewFiles = {};
 }
 
-function ssBuildSection(type, label, existingUrl) {
+function ssBuildSection(type, label, existingUrl, locked) {
   const existingHtml = existingUrl ? `
     <div class="ss-existing-wrap">
       <img src="${existingUrl}" class="ss-thumb" onclick="window.open('${existingUrl}','_blank')" title="Klik untuk buka">
       <span class="ss-badge-done">✅ Sudah ada — klik gambar untuk buka</span>
     </div>` : '';
-  return `
-  <div class="ss-section">
-    <div class="ss-section-label">${label}</div>
-    ${existingHtml}
-    <div id="ss-new-preview-${type}" class="ss-existing-wrap" style="display:none">
+
+  // Upload SS ditutup permanen begitu masuk jam 8 WIB (gak kebuka lagi jam 9 kayak lock input
+  // order) — CS diarahkan kirim manual ke validator, bukan notif WA otomatis dari sistem.
+  const uploadControls = locked
+    ? `<div class="ss-locked-notice">🔒 Upload bukti sudah ditutup (lewat jam 8 pagi). Kirim bukti ke validator ya.</div>`
+    : `<div id="ss-new-preview-${type}" class="ss-existing-wrap" style="display:none">
       <img id="ss-new-img-${type}" class="ss-thumb">
       <span class="ss-badge-new">📎 Siap diupload</span>
     </div>
     <label class="ss-pick-btn" for="ss-file-${type}">
       ${existingUrl ? '🔄 Ganti SS' : '📎 Pilih Gambar'}
     </label>
-    <input type="file" id="ss-file-${type}" accept="image/*" style="display:none" onchange="ssOnFileChange('${type}',this)">
+    <input type="file" id="ss-file-${type}" accept="image/*" style="display:none" onchange="ssOnFileChange('${type}',this)">`;
+
+  return `
+  <div class="ss-section">
+    <div class="ss-section-label">${label}</div>
+    ${existingHtml}
+    ${uploadControls}
   </div>`;
 }
 
@@ -1633,6 +1643,14 @@ function getOrderDate() {
 function checkUploadLock() {
   const hour = getWIBHour();
   return hour === 8; // jam 08:00–08:59 = locked
+}
+
+// Beda dari checkUploadLock (yang cuma ngunci 08:00–08:59 lalu kebuka lagi jam 9 buat siklus
+// hari berikutnya) — upload SS ditutup PERMANEN begitu masuk jam 8 pagi, gak kebuka lagi
+// sampai lewat tengah malam (siklus hari baru). Reset otomatis jam 00:00 karena getWIBHour()
+// balik ke bawah 8.
+function checkSSLock() {
+  return getWIBHour() >= 8;
 }
 
 let _lockTimer = null;
