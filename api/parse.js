@@ -29,7 +29,12 @@ Aturan ekstraksi:
 - quantity: angka saja dari jumlah pesanan (contoh: "2", "1")
 - pembayaran: metode pembayaran (contoh: "COD JNE REG", "TRANSFER JNE MENG", "COD LION MENG")
 - total_pembayaran: nilai total rupiah (angka saja tanpa Rp, contoh: "166000")
-- keterangan: baris catatan paling bawah
+- keterangan: baris TERSENDIRI yang biasanya muncul di antara baris "Total Pembayaran" dan baris
+  "Keluhan"/"KELUHAN", formatnya ringkasan produk+qty+nama CS, contoh: "NEW PRIMAGOLD 4 CS HUSNA"
+  atau "NEW SALEB OIRI 1 + MAKSIR 1 CS AMBAR". WAJIB tetap diambil apa adanya walaupun isinya
+  terlihat mirip/duplikat dengan jumlah_pesanan atau instruksi_pengiriman — itu BUKAN alasan buat
+  mengosongkannya, dua-duanya boleh terlihat mirip. Kosongkan HANYA kalau baris seperti ini
+  benar-benar tidak ada sama sekali di teks
 - keluhan: teks setelah kata "keluhan:" jika ada, kosongkan jika tidak ada
 
 Kembalikan HANYA JSON valid dengan keys persis ini:
