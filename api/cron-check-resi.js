@@ -47,12 +47,40 @@ const PROBLEM_PATTERN = /gagal|kendala|bermasalah|problematic|tidak ditemukan|al
 const OTW_PATTERN         = /sedang diantar|dalam pengantaran|out for delivery|kurir menuju|\botw\b|akan dikirim ke alamat penerima|with delivery courier|delivery courier|diantar ke alamat|on delivery|1st attempt|2nd attempt|percobaan/i;
 const KOTA_TUJUAN_PATTERN = /kota tujuan|gudang tujuan|tiba di kota|received at destination|received at warehouse|process and forward|inbound|sti-dest/i;
 
+// Port dari js/shared.js AdsyCRM (sesi 2026-07-10, validasi ~15 resi asli JNT/Lion/JNE/POS):
+// - isPickupPhase: entry code ada kata "PICKUP" (fase jemput dari pengirim di kota ASAL) di-skip
+//   dari cek OTW/Bermasalah/Kota Tujuan — kata "gagal"/"percobaan" di fase ini soal jemput dari
+//   toko, bukan progress ke penerima (resi Lion asli C1QSTIEB: "GAGAL DIJEMPUT...PERCOBAAN
+//   PENJEMPUTAN ULANG" kepancing OTW/Bermasalah padahal blm sampai kota tujuan sama sekali).
+// - isSelfReceipt: "diterima oleh X" cuma SAMPAI kalau X beda dari counter/kota entry itu sendiri
+//   (J&T pake frasa sama buat "diterima oleh COUNTER ASAL buat manifest" vs "diterima oleh
+//   PENERIMA" — resi asli JJ6000055580).
+// - hasReceivedBy: field `receiver` J&T cuma keisi PAS beneran diterima penerima; J&T juga punya
+//   format "Paket telah diterima" TANPA kata "oleh X" yang gak ketangkep regex (resi JJ6000043832).
+function isPickupPhase(e) {
+  return !!(e && e.code && /pickup/i.test(e.code));
+}
+function isSelfReceipt(e) {
+  if (!e || !e.place) return false;
+  const m = /diterima oleh\s+(.+)/i.exec(e.descOnly || '');
+  if (!m) return false;
+  const norm = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return norm(m[1]) === norm(e.place);
+}
+function hasReceivedBy(e) {
+  return !!(e && e.receivedBy);
+}
+
 function computeProgressStep(entries) {
   let step = 2; // resi sudah discan sistem kurir minimal = Dikirim
   (entries || []).forEach(e => {
+    if (isPickupPhase(e)) return;
     const d = (e.desc || '').toLowerCase();
     if (OTW_PATTERN.test(d)) step = Math.max(step, 4);
-    else if (KOTA_TUJUAN_PATTERN.test(d)) step = Math.max(step, 3);
+    // e.atDestination = sinyal terstruktur POS (bandingin kode cabang event vs kode cabang tujuan
+    // order) — teks POS pake "tiba di Cabang X", bukan "tiba di kota" kayak di pattern, jadi gak
+    // kedeteksi kalau cuma andelin regex. Ketauan dari resi asli BAC04072635010ACF3B9.
+    else if (e.atDestination || KOTA_TUJUAN_PATTERN.test(d)) step = Math.max(step, 3);
   });
   return step;
 }
@@ -71,11 +99,11 @@ function mapTrackingStage({ resi, statusCategory, entries }) {
   let stage;
   if (cat.includes('RETUR') || cat.includes('RETURN') || arr.some(e => RETUR_PATTERN.test(e.desc || ''))) {
     stage = 'RETUR';
-  } else if (cat === 'DELIVERED' || /diterima oleh|delivered|\bpod\b/.test(latestDesc)) {
+  } else if (cat === 'DELIVERED' || (/diterima oleh|\bdelivered\b|\bpod\b/.test(latestDesc) && !isSelfReceipt(latest)) || hasReceivedBy(latest)) {
     stage = 'SAMPAI';
   } else {
-    const hasStructuredProblem = arr.some(e => e.group === 'UNDELIVERED' || e.tag === 'actionRequired' || !!e.reasonDelivery);
-    if (hasStructuredProblem || arr.some(e => PROBLEM_PATTERN.test(e.desc || ''))) {
+    const hasStructuredProblem = arr.some(e => !isPickupPhase(e) && (e.group === 'UNDELIVERED' || e.tag === 'actionRequired' || !!e.reasonDelivery));
+    if (hasStructuredProblem || arr.some(e => !isPickupPhase(e) && !e.isPos && PROBLEM_PATTERN.test(e.desc || ''))) {
       stage = 'BERMASALAH';
     } else if (reachedStep >= 4) {
       stage = 'OTW';
@@ -92,9 +120,15 @@ function normalizeMengantar(json) {
   if (!json || !json.success || !json.data) return null;
   const d = json.data;
   const history = Array.isArray(d.history) ? d.history : [];
-  // Gabung desc + code — beberapa kurir (Lion: "STI-DEST"/"POD"/"DEL") taruh sinyal penting di code, bukan desc
+  // Gabung desc + code — beberapa kurir (Lion: "STI-DEST"/"POD"/"DEL") taruh sinyal penting di code, bukan desc.
+  // descOnly/code/place/receivedBy dipisah lagi buat isPickupPhase()/isSelfReceipt()/hasReceivedBy()
+  // yang butuh field asli.
   const entries = history.map(h => ({
     desc: [h.desc, h.code].filter(Boolean).join(' '),
+    descOnly: h.desc || '',
+    code: h.code || null,
+    place: h.counter_name || h.city_name || null,
+    receivedBy: (h.receiver || '').trim() || null,
     group: (h.type && h.type.group) || null,
     tag: (h.type && h.type.tag) || null,
     reasonDelivery: null
@@ -110,9 +144,19 @@ function normalizePos(json) {
   if (!json || !json.success || !json.data) return null;
   const d = json.data;
   const history = Array.isArray(d.connote_history) ? d.connote_history : [];
+  // reasonDelivery = ANY percobaan antar gagal/reschedule (reason_delivery keisi) -- by design
+  // langsung dianggep BERMASALAH dari percobaan pertama gagal (keputusan user, sesi 2026-07-10
+  // AdsyCRM: biar CS bisa proaktif follow up ke pembeli, bukan nunggu kurir nyerah total).
+  // isPos = true -> desc-nya di-skip dari tebak-kata PROBLEM_PATTERN generik (dipinjem dari
+  // kosakata JNE) -- problem POS udah ditentuin murni dari reasonDelivery, gak perlu tebak dari
+  // teks bebas lagi (mencegah jalur lain nyasar kayak "tidak ditempat").
+  // destNopen = kode cabang tujuan akhir order (bukan kprk/hub induk) -- dipakai bandingin ke nopen
+  // tiap event INLOCATION buat mastiin "tiba di cabang TUJUAN" vs cuma numpang lewat hub.
+  const destNopen = (d.connote_customfield && d.connote_customfield.destination_nopen) || null;
   const entries = history.map(h => ({
     desc: [h.content, h.content2].filter(Boolean).join(' '),
-    group: null, tag: null,
+    group: null, tag: null, isPos: true,
+    atDestination: !!(destNopen && h.state === 'INLOCATION' && h.nopen === destNopen),
     reasonDelivery: h.reason_delivery || null
   }));
   return {
