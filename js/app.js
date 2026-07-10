@@ -618,12 +618,16 @@ function parseOrderRegex(text) {
     result.kelurahan = lines[kpIdx - 4];
   }
 
-  // Keterangan: baris antara total_pembayaran dan KELUHAN, bukan baris angka/kalkulasi
+  // Keterangan: baris antara total_pembayaran dan KELUHAN, bukan baris angka/kalkulasi.
+  // Filter lama `!/[+=]/.test(l)` kebablasan — baris keterangan order kombo juga sering ada
+  // tanda "+" (contoh: "NEW SALEB OIRI 1 + MAKSIR 1 CS AMBAR"), jadi ikut kebuang kayak baris
+  // kalkulasi "167000+47000+5000=219000". Sekarang cuma buang baris yang MURNI angka/operator
+  // (gak ada huruf sama sekali), baris keterangan yang ada teksnya tetep lolos walau ada "+".
   const totalIdx   = lines.findIndex(l => /^Total\s*pembayaran\s*:/i.test(l));
   const keluhanIdx = lines.findIndex(l => /^KELUHAN\s*:/i.test(l));
   if (totalIdx >= 0 && keluhanIdx > totalIdx) {
     const between = lines.slice(totalIdx + 1, keluhanIdx)
-      .filter(l => !/[+=]/.test(l) && !/^\d+$/.test(l) && l.length > 2);
+      .filter(l => !/^[\d\s+\-=]+$/.test(l) && l.length > 2);
     result.keterangan = between.join('\n').trim();
   }
 
