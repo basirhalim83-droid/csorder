@@ -19,7 +19,9 @@ module.exports = async function handler(req, res) {
 
 Aturan ekstraksi:
 - no: ambil baris pertama secara lengkap (termasuk nomor, nama ekspedisi, strip, keterangan, dll)
-- nama: nama lengkap customer, pertahankan pemisah "|" jika ada
+- nama: nama lengkap customer SAJA. Kalau baris nama mengandung tanda "|" (order kombo sering
+  nempel catatan produk singkat di belakang nama, contoh "ARIS JONO|ORI 1+MAK 1"), ambil HANYA
+  bagian SEBELUM tanda "|" pertama — bagian setelahnya BUKAN bagian dari nama
 - hp: nomor HP lengkap dengan semua digit
 - alamat: teks mulai setelah kata "ANGAN DIRETUR BARANG PENTING" sampai sebelum tanda "|". Jika tidak ada frasa itu, ambil baris alamat lengkap
 - kelurahan, kecamatan, kabupaten, provinsi, kodepos: ambil dari baris-baris setelah alamat

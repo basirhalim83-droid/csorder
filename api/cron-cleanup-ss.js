@@ -33,6 +33,10 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json'
   };
 
+  // Mode dry-run buat testing aman: ?dry=1 atau header X-Dry-Run -- kelar sampe tahap "nemu apa
+  // yang MESTINYA kehapus", tapi skip request DELETE ke storage & PATCH ke orderan_masuk.
+  const isDry = req.query.dry === '1' || req.headers['x-dry-run'] === '1';
+
   let ordersChecked = 0, filesDeleted = 0, ordersCleared = 0, errors = 0;
 
   try {
@@ -64,7 +68,7 @@ module.exports = async function handler(req, res) {
       });
     });
 
-    if (allPaths.length) {
+    if (allPaths.length && !isDry) {
       // Storage remove batasin per 100 path per request biar body gak kegedean
       for (let i = 0; i < allPaths.length; i += 100) {
         const batch = allPaths.slice(i, i + 100);
@@ -76,11 +80,13 @@ module.exports = async function handler(req, res) {
         if (delRes.ok) filesDeleted += batch.length;
         else errors++;
       }
+    } else if (isDry) {
+      filesDeleted = allPaths.length; // simulasi, gak beneran ke-hit request DELETE-nya
     }
 
     // Kosongin ss_urls di orderan_masuk supaya gak dicoba hapus lagi run berikutnya + tombol
     // "Lihat Bukti" otomatis balik ke "—"/"Upload Bukti" (order udah lewat retensi)
-    if (targets.length) {
+    if (targets.length && !isDry) {
       const ids = targets.map(r => r.id);
       const clearRes = await fetch(`${SUPABASE_URL}/rest/v1/orderan_masuk?id=in.(${ids.join(',')})`, {
         method: 'PATCH',
@@ -89,9 +95,15 @@ module.exports = async function handler(req, res) {
       });
       if (clearRes.ok) ordersCleared = ids.length;
       else errors++;
+    } else if (isDry) {
+      ordersCleared = targets.length; // simulasi
     }
 
-    res.status(200).json({ ordersChecked, filesDeleted, ordersCleared, errors, cutoff: cutoffStr });
+    res.status(200).json({
+      dryRun: isDry,
+      ordersChecked, filesDeleted, ordersCleared, errors, cutoff: cutoffStr,
+      sampleOrderIds: isDry ? targets.slice(0, 10).map(r => r.id) : undefined
+    });
   } catch (e) {
     res.status(500).json({ error: e.message, ordersChecked, filesDeleted, ordersCleared, errors });
   }
