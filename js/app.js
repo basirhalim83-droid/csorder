@@ -712,12 +712,16 @@ async function doParse() {
       if (!json.ok) throw new Error(json.error || 'Parse gagal');
       parsedData = json.data;
 
-      // `nama` & `keterangan` gampang meleset di jalur AI (nama kena nempelin catatan produk
-      // kombo pake "|", keterangan suka dikosongin walau instruksi prompt udah eksplisit) --
-      // koreksi pake hasil regex yang lebih deterministik buat 2 field ini spesifik, walau
-      // regexResult keseluruhan gak valid buat dipakai (field lain mungkin emang butuh AI).
-      if (regexResult.keterangan) parsedData.keterangan = regexResult.keterangan;
-      if (regexResult.nama)       parsedData.nama       = regexResult.nama;
+      // Regex lebih deterministik buat field yang polanya baku (nama, alamat, instruksi,
+      // rincian, keterangan, dll) -- AI kadang salah baca baris yang digabung tanda "|", atau
+      // kebablasan nganggep baris mirip itu duplikat terus dikosongin (obs: keterangan kadang
+      // ke-skip walau prompt udah eksplisit larang). Field APAPUN yang regex berhasil dapetin
+      // (non-empty) menang dipakai, AI cuma ngisi field yang regex-nya bener-bener kosong --
+      // walau regexResult SECARA KESELURUHAN gak valid dipakai penuh (isRegexResultValid gagal
+      // karena ada field lain yang emang butuh AI buat nebak).
+      Object.keys(regexResult).forEach(key => {
+        if (regexResult[key]) parsedData[key] = regexResult[key];
+      });
     }
 
     if (parsedData.nama) parsedData.nama = parsedData.nama.split('|')[0].trim();
