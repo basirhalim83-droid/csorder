@@ -1233,8 +1233,7 @@ function val(id) {
 }
 
 // Field yang dicek pas submit -- gabungan semua sumber validasi (wilayah, ekspedisi, rincian,
-// SKU). optional:true = boleh kosong (gak semua order ada baris keterangan/instruksi di teks
-// aslinya), sisanya dianggap wajib.
+// SKU). Semua wajib diisi.
 const SUBMIT_CHECK_FIELDS = [
   { id: 'no',           label: 'No Order' },
   { id: 'nama',         label: 'Nama' },
@@ -1249,7 +1248,7 @@ const SUBMIT_CHECK_FIELDS = [
   { id: 'pembayaran',   label: 'Pembayaran' },
   { id: 'rincian',      label: 'Rincian Pembayaran' },
   { id: 'total',        label: 'Total Pembayaran' },
-  { id: 'keterangan',   label: 'Keterangan', optional: true },
+  { id: 'keterangan',   label: 'Keterangan' },
 ];
 
 // Ambil teks hint asli (rekomendasi dari validateWilayah/Ekspedisi/Rincian/SKU) tanpa tombol
