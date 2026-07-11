@@ -1356,6 +1356,7 @@ function applyTrkFilter() {
     (r.cs_nama || '').toLowerCase().includes(search)
   );
   renderTrkCards(filtered);
+  updateTrkCards(filtered);
   const info = filtered.length < trkAllData.length
     ? `${filtered.length} dari ${trkAllData.length} data`
     : `${trkAllData.length} data`;
