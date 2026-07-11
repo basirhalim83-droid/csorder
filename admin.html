@@ -337,87 +337,119 @@
     </div>
   </div>
 
-  <!-- ══ PAGE: TRACKING ORDER ══ -->
+  <!-- ══ PAGE: TRACKING ORDER CS ══ -->
   <div id="page-tracking" class="page">
-    <div class="page-title">Tracking Order CS</div>
-    <div class="page-sub">Monitor status pengiriman semua orderan CS</div>
-
-    <!-- Filter bar -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem">
-      <div style="position:relative">
-        <button id="adDrp-trigger" class="btn-secondary" onclick="adDrpToggle()" style="display:flex;align-items:center;gap:6px;font-size:12px">
-          📅 <span id="adDrp-label">30 hari terakhir</span>
-        </button>
-        <div id="adDrp-dropdown" class="drp-dropdown" style="z-index:200"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Tracking Order CS</div>
+        <div class="page-sub" style="margin:0">Status pengiriman semua CS</div>
       </div>
-      <select id="adTrk-cs-filter" class="f-input" style="width:auto;font-size:12px;padding:6px 10px" onchange="renderAdminTrkFiltered()">
+      <div style="position:relative" id="trk-drp-wrap">
+        <button class="drp-trigger" onclick="trkDrpToggle()" id="trk-drp-trigger">
+          <span>📅</span>
+          <span id="trk-drp-label">30 Hari Terakhir</span>
+          <span style="color:var(--muted)">▾</span>
+        </button>
+        <div class="drp-dropdown" id="trk-drp-dropdown">
+          <div class="drp-presets" style="width:145px;flex-shrink:0;border-right:1px solid var(--border);padding:10px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPreset(1,'Hari Ini',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Hari Ini</button>
+            <button class="trk-drp-preset" onclick="trkDrpPresetYesterday(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Kemarin</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPreset(7,'7 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">7 Hari Terakhir</button>
+            <button class="trk-drp-preset" onclick="trkDrpPreset(14,'14 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">14 Hari Terakhir</button>
+            <button class="trk-drp-preset active" onclick="trkDrpPreset(30,'30 Hari Terakhir',this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--accent);font-weight:600">30 Hari Terakhir</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+            <button class="trk-drp-preset" onclick="trkDrpPresetThisMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Ini</button>
+            <button class="trk-drp-preset" onclick="trkDrpPresetLastMonth(this)" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--muted)">Bulan Lalu</button>
+          </div>
+          <div style="display:flex;flex-direction:column;flex:1;min-width:280px">
+            <div class="drp-cal" id="trk-drp-cal" style="padding:14px;flex:1"></div>
+            <div class="drp-footer" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--muted)">
+                <span id="trk-drp-sel-start">—</span> → <span id="trk-drp-sel-end">—</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="drp-cancel" onclick="trkDrpClose()">Batal</button>
+                <button class="drp-apply" onclick="trkDrpApply()">Terapkan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sum-grid" style="margin-top:12px;margin-bottom:12px">
+      <div class="sum-card tr-stat-clickable" id="trk-stat-SEMUA" onclick="trSetFilter('SEMUA')">
+        <div class="s-label">Total Kiriman</div>
+        <div class="s-value s-total" id="trk-total">—</div>
+      </div>
+      <div class="sum-card tr-stat-clickable" id="trk-stat-ON_PROSES" onclick="trSetFilter('ON_PROSES_GROUP')">
+        <div class="s-label">On Proses</div>
+        <div class="s-value s-tunggu" id="trk-proses">—</div>
+      </div>
+      <div class="sum-card tr-stat-clickable" id="trk-stat-BERMASALAH" onclick="trSetFilter('BERMASALAH')">
+        <div class="s-label">Undell</div>
+        <div class="s-value" style="color:#d97706" id="trk-undell">—</div>
+      </div>
+      <div class="sum-card tr-stat-clickable" id="trk-stat-SAMPAI" onclick="trSetFilter('SAMPAI')">
+        <div class="s-label">Delivered</div>
+        <div class="s-value s-kirim" id="trk-delivered">—</div>
+      </div>
+      <div class="sum-card tr-stat-clickable" id="trk-stat-RETUR" onclick="trSetFilter('RETUR')">
+        <div class="s-label">Retur</div>
+        <div class="s-value s-cancel" id="trk-retur">—</div>
+      </div>
+    </div>
+
+    <div id="trk-alerts"></div>
+    <div class="tr-tabs" id="trk-tabs"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <select id="trk-filter-eks" class="trk-select" onchange="applyTrkFilter()">
+        <option value="">Semua Ekspedisi</option>
+        <option value="JNE">JNE</option>
+        <option value="JNT">J&amp;T</option>
+        <option value="SiCepat">SiCepat</option>
+        <option value="Anteraja">Anteraja</option>
+        <option value="Ninja">Ninja</option>
+        <option value="Lion">Lion</option>
+        <option value="TIKI">TIKI</option>
+        <option value="SAP">SAP</option>
+      </select>
+      <select id="trk-cs-filter" class="trk-select" onchange="applyTrkFilter()">
         <option value="">Semua CS</option>
       </select>
-      <input id="adTrk-search" class="admin-search" placeholder="Cari nama / HP / resi..." oninput="renderAdminTrkFiltered()" style="font-size:12px" />
-      <button class="btn-secondary" onclick="loadAdminTracking()" style="font-size:12px;padding:6px 14px">↺ Refresh</button>
-    </div>
-
-    <!-- Summary cards -->
-    <div class="admin-stat-grid" style="margin-bottom:1rem">
-      <div class="admin-stat-card">
-        <div class="ast-label">Total Order</div>
-        <div class="ast-value s-total" id="adTrk-total">—</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="ast-label">On Proses</div>
-        <div class="ast-value s-accent" id="adTrk-proses">—</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="ast-label">Bermasalah</div>
-        <div class="ast-value s-hold" id="adTrk-undell">—</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="ast-label">Sampai</div>
-        <div class="ast-value s-kirim" id="adTrk-sampai">—</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="ast-label">Retur</div>
-        <div class="ast-value s-cancel" id="adTrk-retur">—</div>
+      <input type="text" id="trk-search" class="trk-search" placeholder="🔍 Cari nama / HP / resi..." oninput="applyTrkFilter()">
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <span id="trk-info" style="font-size:12px;color:var(--muted);font-family:var(--mono);align-self:center;white-space:nowrap">—</span>
+        <button class="btn-secondary" id="trk-refresh-all-btn" onclick="trRefreshAll()" style="font-size:12px;padding:7px 12px">📡 Refresh Semua</button>
+        <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
       </div>
     </div>
 
-    <!-- Status tabs -->
-    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem">
-      <button class="btn-secondary adTrk-tab" data-key="SEMUA"         onclick="adTrkSetFilter('SEMUA')">Semua</button>
-      <button class="btn-secondary adTrk-tab" data-key="ON_PROSES"     onclick="adTrkSetFilter('ON_PROSES')">🚚 On Proses</button>
-      <button class="btn-secondary adTrk-tab" data-key="BERMASALAH"    onclick="adTrkSetFilter('BERMASALAH')">⚠️ Bermasalah</button>
-      <button class="btn-secondary adTrk-tab" data-key="SAMPAI"        onclick="adTrkSetFilter('SAMPAI')">✅ Sampai</button>
-      <button class="btn-secondary adTrk-tab" data-key="RETUR"         onclick="adTrkSetFilter('RETUR')">↩️ Retur</button>
-      <button class="btn-secondary adTrk-tab" data-key="MENUNGGU_RESI" onclick="adTrkSetFilter('MENUNGGU_RESI')">⏳ Menunggu Resi</button>
-    </div>
-
-    <!-- Table -->
-    <div class="table-wrap">
-      <div class="table-scroll" style="max-height:calc(100vh - 430px)">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>CS</th>
-              <th>Customer</th>
-              <th>Ekspedisi</th>
-              <th>Resi</th>
-              <th>Status</th>
-              <th>Update</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="adTrk-tbody">
-            <tr><td colspan="8" class="empty-state">Pilih menu Tracking Order untuk memuat data.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <div id="trk-cards" class="trk-grid"></div>
   </div>
 
 </div><!-- /main-area -->
 
 <div id="toast-wrap" class="toast-wrap"></div>
+
+<!-- Modal detail resi tracking -->
+<div class="tr-modal-overlay" id="tr-modal" style="display:none" onclick="if(event.target===this)trCloseModal()">
+  <div class="tr-modal-box">
+    <div class="tr-modal-head">
+      <div>
+        <div class="tr-modal-title" id="tr-modal-title">Detail Pengiriman</div>
+        <div class="tr-modal-sub" id="tr-modal-sub"></div>
+      </div>
+      <button class="tr-modal-close" onclick="trCloseModal()">✕</button>
+    </div>
+    <div id="tr-modal-body"></div>
+    <div class="tr-modal-actions">
+      <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
+    </div>
+  </div>
+</div>
 
 <script>
 let currentUser   = null;
@@ -455,14 +487,6 @@ const todayStr = () => new Date().toISOString().split('T')[0];
   }
 
   await loadOverview();
-
-  // Set tab Tracking "Semua" aktif secara default
-  document.querySelectorAll('.adTrk-tab').forEach(b => {
-    const active = b.dataset.key === 'SEMUA';
-    b.style.background  = active ? 'var(--accent)' : '';
-    b.style.color       = active ? '#fff' : '';
-    b.style.borderColor = active ? 'var(--accent)' : '';
-  });
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -477,7 +501,7 @@ function switchPage(name) {
   if (name === 'users')    loadUsers();
   if (name === 'fonnte')   loadFonnte();
   if (name === 'sku')      loadSku();
-  if (name === 'tracking') loadAdminTracking();
+  if (name === 'tracking') loadTracking();
 }
 
 // ── SKU ───────────────────────────────────────────────────────────────────────
@@ -881,8 +905,16 @@ async function deleteFonnte(id, label) {
   }
 }
 
-// ══ ADMIN TRACKING ORDER ══════════════════════════════════════════════════════
-// Shared helpers (copy dari app.js — tidak bisa import karena no build step)
+// ══ TRACKING ORDER (copy dari app.js, modif: no cs_id filter + tampilkan cs_nama) ══
+
+// Helpers yang dipakai trkDrp
+const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DAYS_ID   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+function drpFmt(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+}
+
 const EKSPEDISI_LIST = [
   { key:'JNE',      pattern:/\bJNE\b/i },
   { key:'JNT',      pattern:/\bJ[&\+]?T\b|JALUR\s*NUGRAHA/i },
@@ -904,15 +936,16 @@ function extractEkspedisi(text) {
   return null;
 }
 
+const TR_STEP_LABELS = ['Konfirmasi','Dikirim','Kota Tujuan','OTW','Sampai'];
 const TR_STAGE_META = {
-  MENUNGGU_RESI: { label:'⏳ Menunggu Resi', color:'var(--warn)',    bg:'var(--warn-light)'   },
-  BELUM_DICEK:   { label:'🔍 Belum Dicek',   color:'var(--muted)',   bg:'var(--bg)'           },
-  DIKIRIM:       { label:'🚚 Dikirim',       color:'var(--accent)',  bg:'var(--accent-light)' },
-  KOTA_TUJUAN:   { label:'🏙️ Kota Tujuan',  color:'var(--accent)',  bg:'var(--accent-light)' },
-  OTW:           { label:'🛵 OTW',           color:'var(--accent)',  bg:'var(--accent-light)' },
-  SAMPAI:        { label:'✅ Sampai',        color:'var(--success)', bg:'var(--success-light)'},
-  BERMASALAH:    { label:'⚠️ Bermasalah',    color:'var(--danger)',  bg:'var(--danger-light)' },
-  RETUR:         { label:'↩️ Retur',         color:'var(--danger)',  bg:'var(--danger-light)' },
+  MENUNGGU_RESI: { label:'⏳ Menunggu Resi', color:'var(--warn)',    bg:'var(--warn-light)',   step:1 },
+  BELUM_DICEK:   { label:'🔍 Belum Dicek',   color:'var(--muted)',   bg:'var(--bg)',            step:1 },
+  DIKIRIM:       { label:'🚚 Dikirim',       color:'var(--accent)',  bg:'var(--accent-light)',  step:2 },
+  KOTA_TUJUAN:   { label:'🏙️ Kota Tujuan',  color:'var(--accent)',  bg:'var(--accent-light)',  step:3 },
+  OTW:           { label:'🛵 OTW',           color:'var(--accent)',  bg:'var(--accent-light)',  step:4 },
+  SAMPAI:        { label:'✅ Sampai',        color:'var(--success)', bg:'var(--success-light)', step:5 },
+  BERMASALAH:    { label:'⚠️ Bermasalah',    color:'var(--danger)',  bg:'var(--danger-light)',  step:2, problem:true },
+  RETUR:         { label:'↩️ Retur',         color:'var(--danger)',  bg:'var(--danger-light)',  step:2, problem:true },
 };
 const TR_COURIER_MAP = {
   'JNE':'JNE','JNT':'JT','SICEPAT':'SiCepat','LION':'lion',
@@ -940,345 +973,569 @@ function trTimeAgo(iso) {
   return `${Math.floor(hours / 24)} hari lalu`;
 }
 
-// ── DRP (Date Range Picker) untuk Tracking Admin ──────────────────────────────
-const MONTHS_ADM = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-let adDrpSelStart = null, adDrpSelEnd = null, adDrpPickingEnd = false;
-let adDrpViewYear = new Date().getFullYear(), adDrpViewMonth = new Date().getMonth();
-let adDrpStart = null, adDrpEnd = null;
+function trIsPickupPhase(e) {
+  return !!(e && e.code && /pickup/i.test(e.code));
+}
+function trIsSelfReceipt(e) {
+  if (!e || !e.place) return false;
+  const m = /diterima oleh\s+(.+)/i.exec(e.descOnly || '');
+  if (!m) return false;
+  const norm = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return norm(m[1]) === norm(e.place);
+}
+function trHasReceivedBy(e) {
+  return !!(e && e.receivedBy);
+}
+
+function _trNormalizeMengantar(json) {
+  if (!json || !json.success || !json.data) return null;
+  const d = json.data;
+  const history = Array.isArray(d.history) ? d.history : [];
+  const entries = history.map(h => ({
+    desc: [h.desc, h.code].filter(Boolean).join(' '),
+    descOnly: h.desc || '',
+    code: h.code || null,
+    place: h.counter_name || h.city_name || null,
+    receivedBy: (h.receiver || '').trim() || null,
+    group: h.type?.group || null, tag: h.type?.tag || null, reasonDelivery: null
+  }));
+  return {
+    statusCategory: d.statusCategory || d.status || '',
+    entries,
+    detail: { history, receiver: d.RECEIVER_NAME || null, city: d.RECEIVER_CITY || null }
+  };
+}
+
+function _trNormalizePos(json) {
+  if (!json || !json.success || !json.data) return null;
+  const d = json.data;
+  const history = Array.isArray(d.connote_history) ? d.connote_history : [];
+  const destNopen = d.connote_customfield?.destination_nopen || null;
+  const entries = history.map(h => ({
+    desc: [h.content, h.content2].filter(Boolean).join(' '),
+    group: null, tag: null, isPos: true,
+    atDestination: !!(destNopen && h.state === 'INLOCATION' && h.nopen === destNopen),
+    reasonDelivery: h.reason_delivery || null
+  }));
+  return {
+    statusCategory: d.connote_state || '',
+    entries,
+    detail: { history, receiver: d.connote_receiver_name || null, city: null }
+  };
+}
+
+function trMapTrackingStage({ resi, statusCategory, entries }) {
+  if (!resi) return { stage: 'MENUNGGU_RESI', step: 1 };
+  const cat = (statusCategory || '').toUpperCase();
+  const arr = Array.isArray(entries) ? entries : [];
+  const latest = arr.length ? arr[arr.length - 1] : null;
+  const latestDesc = (latest?.desc || '').toLowerCase();
+  let reachedStep = 2;
+  arr.forEach(e => {
+    if (trIsPickupPhase(e)) return;
+    const d = (e.desc || '').toLowerCase();
+    if (/sedang diantar|dalam pengantaran|out for delivery|kurir menuju|\botw\b|akan dikirim ke alamat penerima|with delivery courier|delivery courier|diantar ke alamat|on delivery|1st attempt|2nd attempt|percobaan/i.test(d)) reachedStep = Math.max(reachedStep, 4);
+    else if (e.atDestination || /kota tujuan|gudang tujuan|tiba di kota|received at destination|received at warehouse|process and forward|inbound|sti-dest/i.test(d)) reachedStep = Math.max(reachedStep, 3);
+  });
+  let stage;
+  if (cat.includes('RETUR') || cat.includes('RETURN') || arr.some(e => /retur|dikembalikan|\brts\b|\brto\b|return to sender/i.test(e.desc||''))) {
+    stage = 'RETUR';
+  } else if (cat === 'DELIVERED' || (/diterima oleh|\bdelivered\b|\bpod\b/.test(latestDesc) && !trIsSelfReceipt(latest)) || trHasReceivedBy(latest)) {
+    stage = 'SAMPAI';
+  } else {
+    const hasStructuredProblem = arr.some(e => !trIsPickupPhase(e) && (e.group === 'UNDELIVERED' || e.tag === 'actionRequired' || !!e.reasonDelivery));
+    if (hasStructuredProblem || arr.some(e => !trIsPickupPhase(e) && !e.isPos && /gagal|kendala|bermasalah|problematic|tidak ditemukan|alamat tidak (lengkap|dikenal)|tidak ada orang|tidak ditempat|tidak dihuni|menunggu konfirmasi|disimpan di gudang|ditolak|pindah alamat|box undel/i.test(e.desc||''))) {
+      stage = 'BERMASALAH';
+    } else if (reachedStep >= 4) { stage = 'OTW';
+    } else if (reachedStep >= 3) { stage = 'KOTA_TUJUAN';
+    } else { stage = 'DIKIRIM'; }
+  }
+  return { stage, step: stage === 'SAMPAI' ? 5 : reachedStep };
+}
+
+async function checkResiTracking(resi, ekspedisi) {
+  if (!resi) return null;
+  const eks = (ekspedisi || '').toUpperCase();
+  try {
+    let normalized;
+    if (eks === 'POS' || eks.includes('POS')) {
+      const r = await fetch('/api/pos-tracking?resi=' + encodeURIComponent(resi));
+      normalized = _trNormalizePos(await r.json());
+    } else {
+      const courier = TR_COURIER_MAP[ekspedisi] || TR_COURIER_MAP[eks] || ekspedisi;
+      if (!courier) return null;
+      const r = await fetch('/api/tracking?tracking_number=' + encodeURIComponent(resi) + '&courier=' + encodeURIComponent(courier));
+      normalized = _trNormalizeMengantar(await r.json());
+    }
+    if (!normalized) return null;
+    const { stage, step } = trMapTrackingStage({ resi, ...normalized });
+    return { stage, step, detail: normalized.detail };
+  } catch (e) { return null; }
+}
+
+// ── Tracking DRP ──────────────────────────────────────────────────────────────
+let trkDrpSelStart = null, trkDrpSelEnd = null, trkDrpPickingEnd = false;
+let trkDrpViewYear = new Date().getFullYear(), trkDrpViewMonth = new Date().getMonth();
+let trkDrpStart = null, trkDrpEnd = null;
 
 (function() {
-  adDrpSelStart = new Date(Date.now() - 29*864e5); adDrpSelStart.setHours(0,0,0,0);
-  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
-  adDrpStart = adDrpSelStart.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-  adDrpEnd   = adDrpSelEnd.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  trkDrpSelStart = new Date(Date.now() - 29*864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  trkDrpStart = trkDrpSelStart.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  trkDrpEnd   = trkDrpSelEnd.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 })();
 
-function adDrpFmt(d) {
-  if (!d) return '—';
-  return d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
-}
-function adDrpToggle() {
-  const dd = document.getElementById('adDrp-dropdown');
+function trkDrpToggle() {
+  const dd = document.getElementById('trk-drp-dropdown');
   dd.classList.toggle('open');
-  if (dd.classList.contains('open')) { adDrpRender(); document.addEventListener('click', adDrpOutside); }
-  else document.removeEventListener('click', adDrpOutside);
+  if (dd.classList.contains('open')) { trkDrpRender(); document.addEventListener('click', trkDrpOutside); }
+  else document.removeEventListener('click', trkDrpOutside);
 }
-function adDrpClose() {
-  document.getElementById('adDrp-dropdown').classList.remove('open');
-  document.removeEventListener('click', adDrpOutside);
+function trkDrpClose() {
+  document.getElementById('trk-drp-dropdown').classList.remove('open');
+  document.removeEventListener('click', trkDrpOutside);
 }
-function adDrpOutside(e) {
-  const dd = document.getElementById('adDrp-dropdown');
-  const tr = document.getElementById('adDrp-trigger');
-  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) adDrpClose();
+function trkDrpOutside(e) {
+  const dd = document.getElementById('trk-drp-dropdown');
+  const tr = document.getElementById('trk-drp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) trkDrpClose();
 }
-function adDrpPreset(days, btn) {
-  adDrpSelStart = new Date(Date.now() - (days-1)*864e5); adDrpSelStart.setHours(0,0,0,0);
-  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
-  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+function trkDrpPreset(days, label, btn) {
+  trkDrpSelStart = new Date(Date.now() - (days-1)*864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  adDrpRender();
+  trkDrpUpdateSel(); trkDrpRender();
 }
-function adDrpPresetYesterday(btn) {
-  adDrpSelStart = new Date(Date.now()-864e5); adDrpSelStart.setHours(0,0,0,0);
-  adDrpSelEnd   = new Date(Date.now()-864e5); adDrpSelEnd.setHours(23,59,59,999);
-  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+function trkDrpPresetYesterday(btn) {
+  trkDrpSelStart = new Date(Date.now()-864e5); trkDrpSelStart.setHours(0,0,0,0);
+  trkDrpSelEnd   = new Date(Date.now()-864e5); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  adDrpRender();
+  trkDrpUpdateSel(); trkDrpRender();
 }
-function adDrpPresetThisMonth(btn) {
-  adDrpSelStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
-  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+function trkDrpPresetThisMonth(btn) {
+  trkDrpSelStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  trkDrpSelEnd   = new Date(); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  adDrpRender();
+  trkDrpUpdateSel(); trkDrpRender();
 }
-function adDrpApply() {
-  if (!adDrpSelStart) return;
-  const s = adDrpSelStart, e = adDrpSelEnd || adDrpSelStart;
+function trkDrpPresetLastMonth(btn) {
+  const n = new Date();
+  trkDrpSelStart = new Date(n.getFullYear(), n.getMonth()-1, 1);
+  trkDrpSelEnd   = new Date(n.getFullYear(), n.getMonth(), 0); trkDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('.trk-drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trkDrpUpdateSel(); trkDrpRender();
+}
+function trkDrpUpdateSel() {
+  document.getElementById('trk-drp-sel-start').textContent = drpFmt(trkDrpSelStart);
+  document.getElementById('trk-drp-sel-end').textContent   = drpFmt(trkDrpSelEnd);
+}
+function trkDrpApply() {
+  if (!trkDrpSelStart) return;
+  const s = trkDrpSelStart, e = trkDrpSelEnd || trkDrpSelStart;
   e.setHours(23,59,59,999);
-  adDrpStart = s.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-  adDrpEnd   = e.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-  const label = adDrpStart === adDrpEnd ? adDrpFmt(s) : adDrpFmt(s) + ' — ' + adDrpFmt(e);
-  document.getElementById('adDrp-label').textContent = label;
-  adDrpClose();
-  loadAdminTracking();
+  trkDrpStart = s.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  trkDrpEnd   = e.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const label = trkDrpStart === trkDrpEnd ? drpFmt(s) : drpFmt(s) + ' — ' + drpFmt(e);
+  document.getElementById('trk-drp-label').textContent = label;
+  trkDrpClose();
+  loadTracking();
 }
-function adDrpClickDay(y, m, d) {
+function trkDrpClickDay(y, m, d) {
   const clicked = new Date(y, m, d);
-  if (!adDrpSelStart || (adDrpSelStart && adDrpSelEnd)) {
-    adDrpSelStart = clicked; adDrpSelEnd = null; adDrpPickingEnd = true;
+  if (!trkDrpSelStart || (trkDrpSelStart && trkDrpSelEnd)) {
+    trkDrpSelStart = clicked; trkDrpSelEnd = null; trkDrpPickingEnd = true;
   } else {
-    if (clicked < adDrpSelStart) { adDrpSelEnd = adDrpSelStart; adDrpSelStart = clicked; }
-    else adDrpSelEnd = clicked;
-    adDrpPickingEnd = false;
+    if (clicked < trkDrpSelStart) { trkDrpSelEnd = trkDrpSelStart; trkDrpSelStart = clicked; }
+    else trkDrpSelEnd = clicked;
+    trkDrpPickingEnd = false;
   }
-  adDrpRender();
+  trkDrpUpdateSel(); trkDrpRender();
 }
-function adDrpRender() {
-  const y = adDrpViewYear, m = adDrpViewMonth;
-  const firstDay   = new Date(y, m, 1).getDay() || 7;
-  const daysInMon  = new Date(y, m+1, 0).getDate();
-  const prevDays   = new Date(y, m, 0).getDate();
-  const DAYS_ADM   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
-  let html = `<div class="drp-header">
-    <div class="drp-selected">
-      <span>${adDrpFmt(adDrpSelStart)}</span>
-      <span style="color:var(--muted)">→</span>
-      <span>${adDrpFmt(adDrpSelEnd)}</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:4px;margin-top:6px">
-      <button class="drp-nav" onclick="adDrpNav(-1)">‹</button>
-      <span style="flex:1;text-align:center;font-size:12px;font-weight:600">${MONTHS_ADM[m]} ${y}</span>
-      <button class="drp-nav" onclick="adDrpNav(1)">›</button>
-    </div>
-    <div class="drp-grid">
-      ${DAYS_ADM.map(d=>`<div class="drp-day-label">${d}</div>`).join('')}`;
-  for (let i = firstDay-1; i > 0; i--) html += `<button class="drp-day other-month" onclick="adDrpNav(-1)">${prevDays-i+1}</button>`;
-  for (let d = 1; d <= daysInMon; d++) {
-    const cur = new Date(y, m, d);
-    const isS = adDrpSelStart && cur.getTime() === new Date(adDrpSelStart.getFullYear(), adDrpSelStart.getMonth(), adDrpSelStart.getDate()).getTime();
-    const isE = adDrpSelEnd   && cur.getTime() === new Date(adDrpSelEnd.getFullYear(),   adDrpSelEnd.getMonth(),   adDrpSelEnd.getDate()).getTime();
-    const inR = adDrpSelStart && adDrpSelEnd && cur > adDrpSelStart && cur < adDrpSelEnd;
-    let cls   = 'drp-day' + (isS?' drp-start':'') + (isE?' drp-end':'') + (inR?' drp-in-range':'');
-    html += `<button class="${cls}" onclick="adDrpClickDay(${y},${m},${d})">${d}</button>`;
-  }
-  let extra = firstDay-1+daysInMon, nd = 1;
-  while (extra % 7 !== 0) { html += `<button class="drp-day other-month" onclick="adDrpNav(1)">${nd++}</button>`; extra++; }
-  html += `</div></div>
-  <div class="drp-presets">
-    <button class="drp-preset active" onclick="adDrpPreset(30,this)">30 hari</button>
-    <button class="drp-preset" onclick="adDrpPreset(7,this)">7 hari</button>
-    <button class="drp-preset" onclick="adDrpPresetYesterday(this)">Kemarin</button>
-    <button class="drp-preset" onclick="adDrpPresetThisMonth(this)">Bulan ini</button>
+function trkDrpRender() {
+  const y = trkDrpViewYear, m = trkDrpViewMonth;
+  const firstDay    = new Date(y, m, 1).getDay();
+  const startPad    = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const prevDays    = new Date(y, m, 0).getDate();
+  const today       = new Date(); today.setHours(0,0,0,0);
+  let html = `<div class="drp-cal-hdr">
+    <button class="drp-nav" onclick="trkDrpNav(-1)">‹</button>
+    <div class="drp-cal-title">${MONTHS_ID[m]} ${y}</div>
+    <button class="drp-nav" onclick="trkDrpNav(1)">›</button>
   </div>
-  <div class="drp-footer"><button class="drp-apply" onclick="adDrpApply()">Terapkan</button></div>`;
-  document.getElementById('adDrp-dropdown').innerHTML = html;
+  <div class="drp-days-hdr">${DAYS_ID.map(d => '<span>' + d + '</span>').join('')}</div>
+  <div class="drp-days">`;
+  for (let i = startPad; i > 0; i--) html += `<button class="drp-day other-month" onclick="trkDrpNav(-1)">${prevDays-i+1}</button>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cur = new Date(y, m, d);
+    const isToday = cur.getTime() === today.getTime();
+    const isStart = trkDrpSelStart && cur.getTime() === new Date(trkDrpSelStart.getFullYear(), trkDrpSelStart.getMonth(), trkDrpSelStart.getDate()).getTime();
+    const isEnd   = trkDrpSelEnd   && cur.getTime() === new Date(trkDrpSelEnd.getFullYear(),   trkDrpSelEnd.getMonth(),   trkDrpSelEnd.getDate()).getTime();
+    const inRange = trkDrpSelStart && trkDrpSelEnd && cur > trkDrpSelStart && cur < trkDrpSelEnd;
+    let cls = 'drp-day';
+    if (isStart && isEnd) cls += ' selected';
+    else if (isStart) cls += ' range-start';
+    else if (isEnd)   cls += ' range-end';
+    else if (inRange) cls += ' in-range';
+    if (isToday) cls += ' today';
+    html += `<button class="${cls}" onclick="trkDrpClickDay(${y},${m},${d})">${d}</button>`;
+  }
+  const total = startPad + daysInMonth;
+  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) html += `<button class="drp-day other-month" onclick="trkDrpNav(1)">${d}</button>`;
+  html += '</div>';
+  document.getElementById('trk-drp-cal').innerHTML = html;
 }
-function adDrpNav(dir) {
-  adDrpViewMonth += dir;
-  if (adDrpViewMonth > 11) { adDrpViewMonth = 0; adDrpViewYear++; }
-  if (adDrpViewMonth < 0)  { adDrpViewMonth = 11; adDrpViewYear--; }
-  adDrpRender();
+function trkDrpNav(dir) {
+  trkDrpViewMonth += dir;
+  if (trkDrpViewMonth > 11) { trkDrpViewMonth = 0; trkDrpViewYear++; }
+  if (trkDrpViewMonth < 0)  { trkDrpViewMonth = 11; trkDrpViewYear--; }
+  trkDrpRender();
 }
 
-// ── Data & Filter state ───────────────────────────────────────────────────────
-let adTrkAllData = [];
-let adTrkFilter  = 'SEMUA';
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const TR_TABS = [
+  { key:'SEMUA',         label:'Semua' },
+  { key:'MENUNGGU_RESI', label:'⏳ Menunggu Resi' },
+  { key:'DIKIRIM',       label:'🚚 Dikirim' },
+  { key:'KOTA_TUJUAN',   label:'🏙️ Kota Tujuan' },
+  { key:'OTW',           label:'🛵 OTW' },
+  { key:'SAMPAI',        label:'✅ Sampai' },
+  { key:'BERMASALAH',    label:'⚠️ Bermasalah' },
+  { key:'RETUR',         label:'↩️ Retur' },
+];
+const TR_ON_PROSES_STAGES = ['MENUNGGU_RESI','BELUM_DICEK','DIKIRIM','KOTA_TUJUAN','OTW'];
+let trFilterStage = 'SEMUA';
 
-// ── Load ──────────────────────────────────────────────────────────────────────
-async function loadAdminTracking() {
-  const tbody = document.getElementById('adTrk-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Memuat...</td></tr>';
+function trSetFilter(key) {
+  trFilterStage = key;
+  renderTrkTabs();
+  applyTrkFilter();
+}
+function renderTrkTabs() {
+  const wrap = document.getElementById('trk-tabs');
+  if (!wrap) return;
+  wrap.innerHTML = TR_TABS.map(t =>
+    `<div class="tr-tab ${trFilterStage===t.key?'tr-tab-active':''}" onclick="trSetFilter('${t.key}')">${t.label}</div>`
+  ).join('');
+  const cardMap = { SEMUA:'SEMUA', ON_PROSES:'ON_PROSES_GROUP', BERMASALAH:'BERMASALAH', RETUR:'RETUR', SAMPAI:'SAMPAI' };
+  Object.entries(cardMap).forEach(([cardKey, filterKey]) => {
+    document.getElementById('trk-stat-'+cardKey)?.classList.toggle('tr-stat-active', trFilterStage===filterKey);
+  });
+}
 
+// ── Data ──────────────────────────────────────────────────────────────────────
+let trkAllData = [];
+
+async function trFetchTrackingRows(masukList, range) {
+  if (!masukList.length) return [];
+  const hpTanggalMap = {};
+  masukList.forEach(r => {
+    let hp = (r.hp || '').replace(/\D/g, '');
+    if (hp.startsWith('62')) hp = hp.slice(2);
+    if (hp.startsWith('0'))  hp = hp.slice(1);
+    if (!hp) return;
+    if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
+    if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
+  });
+  const hpList = Object.keys(hpTanggalMap);
+  if (!hpList.length) return [];
+  let q = sb.from('all_orderan')
+    .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+    .eq('sumber', 'cs_input')
+    .in('hp', hpList)
+    .limit(500);
+  if (range?.start) q = q.gte('tanggal', range.start);
+  if (range?.end)   q = q.lte('tanggal', range.end);
+  const { data: allData, error: allErr } = await q.order('tanggal', { ascending: false });
+  if (allErr) throw allErr;
+  const filtered = (allData || []).filter(r => {
+    const tgl = (r.tanggal || '').slice(0, 10);
+    return hpTanggalMap[r.hp]?.has(tgl);
+  });
+  const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
+  let trkByResi = {};
+  if (resiList.length) {
+    const { data: trkData } = await sb.from('cs_order_tracking')
+      .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+      .in('resi', resiList);
+    (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+  }
+  filtered.forEach(r => {
+    const t = r.resi ? trkByResi[r.resi.trim()] : null;
+    r.status_resi            = t?.status_resi            || null;
+    r.status_resi_step       = t?.status_resi_step       || null;
+    r.status_resi_updated_at = t?.status_resi_updated_at || null;
+    r.status_resi_detail     = t?.status_resi_detail     || null;
+  });
+  return filtered;
+}
+
+// ADMIN MODIFICATION: tidak filter by cs_id, ambil cs_nama dari orderan_masuk
+async function loadTracking() {
+  if (!currentUser) return;
+  renderTrkTabs();
+  const trkStart = trkDrpStart || todayStr();
+  const trkEnd   = trkDrpEnd   || todayStr();
+  const cardsEl  = document.getElementById('trk-cards');
+  if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
   try {
-    // 1. Semua orderan_masuk di rentang tanggal (semua CS)
+    // Ambil SEMUA orderan_masuk (bukan filter cs_id), include cs_nama
     const { data: masukData, error: masukErr } = await sb.from('orderan_masuk')
-      .select('hp, tanggal, cs_nama')
-      .gte('tanggal', adDrpStart)
-      .lte('tanggal', adDrpEnd);
+      .select('hp, nama, tanggal, cs_nama')
+      .gte('tanggal', trkStart)
+      .lte('tanggal', trkEnd);
     if (masukErr) throw masukErr;
-
     const masukList = masukData || [];
     if (!masukList.length) {
-      adTrkAllData = [];
-      adTrkUpdateCards([]);
-      adTrkFillCSDropdown([]);
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada order di periode ini.</td></tr>';
+      trkAllData = [];
+      updateTrkCards([]);
+      document.getElementById('trk-alerts').innerHTML = '';
+      document.getElementById('trk-info').textContent = '0 data';
+      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di periode ini.</div>';
       return;
     }
-
-    // 2. Build hpTanggalMap + csNamaMap
-    const hpTanggalMap = {};
-    const csNamaMap    = {};
+    // Build csNamaMap: hp_8xxx_tanggal → cs_nama
+    const csNamaMap = {};
     masukList.forEach(r => {
-      let hp = (r.hp || '').replace(/\D/g,'');
+      let hp = (r.hp||'').replace(/\D/g,'');
       if (hp.startsWith('62')) hp = hp.slice(2);
       if (hp.startsWith('0'))  hp = hp.slice(1);
-      if (!hp) return;
-      if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
-      const tgl = (r.tanggal || '').slice(0,10);
-      if (tgl) {
-        hpTanggalMap[hp].add(tgl);
-        const key = hp + '_' + tgl;
-        if (!csNamaMap[key]) csNamaMap[key] = r.cs_nama || '—';
-      }
+      const tgl = (r.tanggal||'').slice(0,10);
+      if (hp && tgl) csNamaMap[hp+'_'+tgl] = r.cs_nama || '—';
     });
-
-    const hpList = Object.keys(hpTanggalMap);
-    if (!hpList.length) {
-      adTrkAllData = []; adTrkUpdateCards([]); adTrkFillCSDropdown([]);
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada data.</td></tr>';
-      return;
-    }
-
-    // 3. Query all_orderan
-    const { data: allData, error: allErr } = await sb.from('all_orderan')
-      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
-      .eq('sumber','cs_input')
-      .in('hp', hpList)
-      .gte('tanggal', adDrpStart)
-      .lte('tanggal', adDrpEnd)
-      .order('tanggal',{ascending:false})
-      .limit(1000);
-    if (allErr) throw allErr;
-
-    // 4. Filter HP+tanggal match + tambah cs_nama
-    const filtered = (allData||[])
-      .filter(r => {
-        const tgl = (r.tanggal||'').slice(0,10);
-        return hpTanggalMap[r.hp]?.has(tgl);
-      })
-      .map(r => {
-        const tgl = (r.tanggal||'').slice(0,10);
-        return { ...r, cs_nama: csNamaMap[r.hp+'_'+tgl] || '—' };
-      });
-
-    // 5. Merge cs_order_tracking
-    const resiList = [...new Set(filtered.map(r => (r.resi||'').trim()).filter(Boolean))];
-    let trkByResi  = {};
-    if (resiList.length) {
-      const { data: trkData } = await sb.from('cs_order_tracking')
-        .select('resi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
-        .in('resi', resiList);
-      (trkData||[]).forEach(t => { trkByResi[t.resi] = t; });
-    }
-
-    adTrkAllData = filtered.map(r => {
-      const t = r.resi ? trkByResi[r.resi.trim()] : null;
-      return {
-        ...r,
-        status_resi:            t?.status_resi            || null,
-        status_resi_step:       t?.status_resi_step       || null,
-        status_resi_updated_at: t?.status_resi_updated_at || null,
-        status_resi_detail:     t?.status_resi_detail     || null,
-      };
+    trkAllData = await trFetchTrackingRows(masukList, { start: trkStart, end: trkEnd });
+    // Tambahkan cs_nama ke setiap row
+    trkAllData.forEach(r => {
+      const tgl = (r.tanggal||'').slice(0,10);
+      r.cs_nama = csNamaMap[r.hp+'_'+tgl] || '—';
     });
-
-    adTrkUpdateCards(adTrkAllData);
-    adTrkFillCSDropdown(adTrkAllData);
-    renderAdminTrkFiltered();
-
+    updateTrkCards(trkAllData);
+    showTrkAlerts(trkAllData);
+    updateCsFilter();
+    applyTrkFilter();
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Error: ${e.message}</td></tr>`;
     showToast('Gagal load tracking: ' + e.message, 'error');
+    if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Gagal memuat data.</div>';
   }
 }
 
-function adTrkFillCSDropdown(list) {
-  const sel   = document.getElementById('adTrk-cs-filter');
+function updateCsFilter() {
+  const sel = document.getElementById('trk-cs-filter');
+  if (!sel) return;
   const curr  = sel.value;
-  const names = [...new Set(list.map(o => o.cs_nama).filter(n => n && n !== '—'))].sort();
+  const names = [...new Set(trkAllData.map(r => r.cs_nama).filter(n => n && n !== '—'))].sort();
   sel.innerHTML = '<option value="">Semua CS</option>' +
     names.map(n => `<option value="${n}" ${n===curr?'selected':''}>${n}</option>`).join('');
 }
 
-function adTrkSetFilter(key) {
-  adTrkFilter = key;
-  document.querySelectorAll('.adTrk-tab').forEach(b => {
-    const active = b.dataset.key === key;
-    b.style.background  = active ? 'var(--accent)' : '';
-    b.style.color       = active ? '#fff' : '';
-    b.style.borderColor = active ? 'var(--accent)' : '';
-  });
-  renderAdminTrkFiltered();
-}
-
-function renderAdminTrkFiltered() {
-  const csFilter = document.getElementById('adTrk-cs-filter')?.value || '';
-  const search   = (document.getElementById('adTrk-search')?.value || '').toLowerCase();
-  let list = adTrkAllData;
-  if (csFilter) list = list.filter(o => o.cs_nama === csFilter);
-  if (adTrkFilter !== 'SEMUA') {
-    const ON_PROSES_STAGES = ['MENUNGGU_RESI','BELUM_DICEK','DIKIRIM','KOTA_TUJUAN','OTW'];
-    if (adTrkFilter === 'ON_PROSES') {
-      list = list.filter(o => ON_PROSES_STAGES.includes(trEffectiveStage(o)));
-    } else {
-      list = list.filter(o => trEffectiveStage(o) === adTrkFilter);
+// ADMIN MODIFICATION: tambah filter cs_nama
+function applyTrkFilter() {
+  const eksF   = document.getElementById('trk-filter-eks')?.value    || '';
+  const csF    = document.getElementById('trk-cs-filter')?.value     || '';
+  const search = (document.getElementById('trk-search')?.value || '').toLowerCase();
+  let filtered = trkAllData.filter(r => {
+    const stage = trEffectiveStage(r);
+    if (trFilterStage === 'ON_PROSES_GROUP') {
+      if (!TR_ON_PROSES_STAGES.includes(stage)) return false;
+    } else if (trFilterStage !== 'SEMUA' && stage !== trFilterStage) {
+      return false;
     }
-  }
-  if (search) {
-    list = list.filter(o =>
-      (o.nama    ||'').toLowerCase().includes(search) ||
-      (o.hp      ||'').includes(search) ||
-      (o.resi    ||'').toLowerCase().includes(search) ||
-      (o.cs_nama ||'').toLowerCase().includes(search)
-    );
-  }
-  renderAdminTrkTable(list);
+    return true;
+  });
+  if (eksF)   filtered = filtered.filter(r => extractEkspedisi(r.pembayaran) === eksF);
+  if (csF)    filtered = filtered.filter(r => r.cs_nama === csF);
+  if (search) filtered = filtered.filter(r =>
+    (r.nama    || '').toLowerCase().includes(search) ||
+    (r.hp      || '').includes(search)               ||
+    (r.resi    || '').toLowerCase().includes(search) ||
+    (r.cs_nama || '').toLowerCase().includes(search)
+  );
+  renderTrkCards(filtered);
+  const info = filtered.length < trkAllData.length
+    ? `${filtered.length} dari ${trkAllData.length} data`
+    : `${trkAllData.length} data`;
+  document.getElementById('trk-info').textContent = info;
 }
 
-function adTrkUpdateCards(list) {
-  const get = key => list.filter(o => trCardState(trEffectiveStage(o)) === key).length;
-  document.getElementById('adTrk-total').textContent  = list.length || '—';
-  document.getElementById('adTrk-proses').textContent = get('proses')    || '—';
-  document.getElementById('adTrk-undell').textContent = get('undell')    || '—';
-  document.getElementById('adTrk-sampai').textContent = get('delivered') || '—';
-  document.getElementById('adTrk-retur').textContent  = get('retur')     || '—';
+function trBadgeHtml(row) {
+  const stage = trEffectiveStage(row);
+  const meta  = TR_STAGE_META[stage];
+  const ago   = row.status_resi_updated_at ? ` <span style="opacity:.6;font-weight:400">· ${trTimeAgo(row.status_resi_updated_at)}</span>` : '';
+  return `<span class="badge" style="background:${meta.bg};color:${meta.color}">${meta.label}${ago}</span>`;
 }
 
-function renderAdminTrkTable(list) {
-  const tbody = document.getElementById('adTrk-tbody');
+function trStepperHtml(row) {
+  const stage   = trEffectiveStage(row);
+  const meta    = TR_STAGE_META[stage];
+  const step    = row.status_resi_step || meta.step;
+  const allDone = stage === 'SAMPAI';
+  return `<div class="tr-stepper">${TR_STEP_LABELS.map((label, i) => {
+    const idx = i + 1;
+    let cls = 'tr-step';
+    if (allDone || idx < step) cls += ' tr-step-done';
+    else if (idx === step) cls += meta.problem ? ' tr-step-problem' : ' tr-step-active';
+    const icon = (allDone || idx < step) ? '✓' : idx;
+    return `<div class="${cls}"><div class="tr-step-line"></div><div class="tr-step-circle">${icon}</div><div class="tr-step-label">${label}</div></div>`;
+  }).join('')}</div>`;
+}
+
+function updateTrkCards(list) {
+  const total     = list.length;
+  const proses    = list.filter(r => trCardState(trEffectiveStage(r)) === 'proses').length;
+  const undell    = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
+  const delivered = list.filter(r => trCardState(trEffectiveStage(r)) === 'delivered').length;
+  const retur     = list.filter(r => trCardState(trEffectiveStage(r)) === 'retur').length;
+  document.getElementById('trk-total').textContent     = total     || '—';
+  document.getElementById('trk-proses').textContent    = proses    || '—';
+  document.getElementById('trk-undell').textContent    = undell    || '—';
+  document.getElementById('trk-delivered').textContent = delivered || '—';
+  document.getElementById('trk-retur').textContent     = retur     || '—';
+}
+
+function showTrkAlerts(list) {
+  const wrap = document.getElementById('trk-alerts');
+  if (!wrap) return;
+  const alerts = [];
+  const undellCount = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
+  if (undellCount > 0) alerts.push(`<div class="trk-alert trk-alert-warn">⚠️ <strong>${undellCount} paket</strong> berstatus Bermasalah — segera hubungi customer.</div>`);
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = cutoff.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const oldProses = list.filter(r => trCardState(trEffectiveStage(r)) === 'proses' && r.tanggal && r.tanggal < cutoffStr).length;
+  if (oldProses > 0) alerts.push(`<div class="trk-alert trk-alert-info">🕐 <strong>${oldProses} paket</strong> masih On Proses lebih dari 7 hari.</div>`);
+  wrap.innerHTML = alerts.join('');
+}
+
+// ADMIN MODIFICATION: tambah badge cs_nama di card
+function renderTrkCards(list) {
+  const wrap = document.getElementById('trk-cards');
+  if (!wrap) return;
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada data.</td></tr>';
+    wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data yang cocok.</div>';
     return;
   }
-  tbody.innerHTML = list.map((o, i) => {
-    const stage  = trEffectiveStage(o);
-    const meta   = TR_STAGE_META[stage];
-    const eks    = extractEkspedisi(o.pembayaran) || '—';
-    const hp08   = (o.hp||'').startsWith('0') ? (o.hp||'') : '0'+(o.hp||'');
-    const ago    = o.status_resi_updated_at ? trTimeAgo(o.status_resi_updated_at) : '—';
-    const resiCell = o.resi
-      ? `<a href="https://cekresi.com/?noresi=${o.resi}" target="_blank" style="font-family:monospace;font-size:11px;color:var(--accent)">${o.resi}</a>`
-      : '<span style="color:var(--muted);font-size:11px">—</span>';
-    const eksSafe = (eks||'').replace(/'/g,"\\'");
-    const resiSafe = (o.resi||'').replace(/'/g,"\\'");
-    const aksiBtn  = o.resi
-      ? `<button class="btn-sm btn-sm-accent" onclick="adTrkCekResi('${resiSafe}','${eksSafe}')">Cek</button>`
-      : '';
-    return `<tr>
-      <td style="color:var(--muted);font-family:var(--mono);font-size:11px">${i+1}</td>
-      <td style="font-weight:600;font-size:12px">${o.cs_nama||'—'}</td>
-      <td>
-        <div style="font-weight:600;font-size:12px">${o.nama||'—'}</div>
-        <div style="color:var(--muted);font-size:11px;font-family:var(--mono)">${hp08}</div>
-      </td>
-      <td style="font-size:12px;font-weight:600">${eks}</td>
-      <td>${resiCell}</td>
-      <td><span class="badge" style="background:${meta.bg};color:${meta.color};white-space:nowrap">${meta.label}</span></td>
-      <td style="color:var(--muted);font-size:11px">${ago}</td>
-      <td>${aksiBtn}</td>
-    </tr>`;
+  wrap.innerHTML = list.map(r => {
+    const eks     = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
+    const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
+    const cat     = trCardState(trEffectiveStage(r));
+    const cardCls = cat === 'delivered' ? 'oc-kirim' : cat === 'retur' ? 'oc-rts' : cat === 'undell' ? 'oc-hold' : '';
+    const resiPart = r.resi
+      ? `<span class="trk-resi-link" style="font-size:11px">${r.resi} ↗</span>`
+      : '<span style="color:var(--muted);font-size:11px">Belum ada resi</span>';
+    return `<div class="order-card ${cardCls}"${r.resi ? ` onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" style="cursor:pointer"` : ''}>
+      <div class="oc-header">
+        <span class="oc-nama">${r.nama || '—'}</span>
+        <span class="oc-waktu">${r.tanggal || ''}</span>
+      </div>
+      ${r.cs_nama && r.cs_nama !== '—' ? `<div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:4px">👤 ${r.cs_nama}</div>` : ''}
+      <div class="oc-row">
+        <span class="oc-hp">📱 ${hp08}</span>
+        <span style="color:var(--border-strong)">·</span>
+        <span style="font-size:12px">${eks}</span>
+      </div>
+      <div class="oc-row" style="margin-top:2px">${resiPart}</div>
+      ${trStepperHtml(r)}
+      <div class="oc-footer">
+        <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
+        ${trBadgeHtml(r)}
+      </div>
+    </div>`;
   }).join('');
 }
 
-async function adTrkCekResi(resi, ekspedisi) {
-  showToast('Mengecek ' + resi + '...', 'info');
+let trModalResi = null;
+function trOpenDetail(resi) {
+  const row = trkAllData.find(r => r.resi === resi);
+  if (!row) return;
+  trModalResi = resi;
+  const eks = extractEkspedisi(row.pembayaran) || row.pembayaran || '';
+  document.getElementById('tr-modal-title').textContent = row.nama || 'Detail Pengiriman';
+  document.getElementById('tr-modal-sub').textContent = (row.resi ? row.resi + ' · ' : '') + eks + (row.cs_nama && row.cs_nama !== '—' ? ' · ' + row.cs_nama : '');
+  const detail  = row.status_resi_detail || null;
+  const history = detail && Array.isArray(detail.history) ? detail.history.slice().reverse() : [];
+  const meta    = TR_STAGE_META[trEffectiveStage(row)];
+  let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
+  if (history.length) {
+    historyHtml = `<div style="margin-top:14px">${history.map((h,i) => `
+      <div class="tr-history-item">
+        <div class="tr-history-dot" style="background:${i===0 ? meta.color : 'var(--border-strong)'}"></div>
+        <div>
+          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.desc || h.content || h.content2 || '-')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${h.date || ''}${h.location_name ? ' · '+h.location_name : ''}</div>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+  document.getElementById('tr-modal-body').innerHTML = `
+    <div style="margin-top:10px">${trBadgeHtml(row)}</div>
+    ${trStepperHtml(row)}
+    ${historyHtml}
+  `;
+  document.getElementById('tr-modal').style.display = 'flex';
+}
+function trCloseModal() {
+  document.getElementById('tr-modal').style.display = 'none';
+  trModalResi = null;
+}
+
+async function trSaveTracking(resi, ekspedisi, result) {
+  await sb.from('cs_order_tracking').upsert({
+    resi, ekspedisi,
+    status_resi: result.stage,
+    status_resi_step: result.step,
+    status_resi_updated_at: new Date().toISOString(),
+    status_resi_detail: result.detail
+  }, { onConflict: 'resi' });
+}
+
+async function trManualCheckFromModal() {
+  const row = trkAllData.find(r => r.resi === trModalResi);
+  if (!row || !row.resi) { showToast('Belum ada resi untuk order ini.', 'error'); return; }
+  const eks    = extractEkspedisi(row.pembayaran) || row.pembayaran;
+  const result = await checkResiTracking(row.resi, eks);
+  if (!result) { showToast('Gagal cek resi — pastikan ekspedisi terisi & resi valid.', 'error'); return; }
+  await trSaveTracking(row.resi, eks, result);
+  row.status_resi            = result.stage;
+  row.status_resi_step       = result.step;
+  row.status_resi_updated_at = new Date().toISOString();
+  row.status_resi_detail     = result.detail;
+  trOpenDetail(row.resi);
+  updateTrkCards(trkAllData);
+  applyTrkFilter();
+}
+
+async function trRefreshAll() {
+  const btn = document.getElementById('trk-refresh-all-btn');
+  if (!btn) return;
+  const origLabel = btn.textContent;
+  btn.disabled = true;
   try {
-    const courier = TR_COURIER_MAP[ekspedisi?.toUpperCase()] || ekspedisi;
-    const isPOS   = /^POS/i.test(ekspedisi||'');
-    let result;
-    if (isPOS) {
-      const r = await fetch(`/api/pos-tracking?resi=${encodeURIComponent(resi)}`);
-      result  = await r.json();
-    } else {
-      const r = await fetch(`/api/tracking?tracking_number=${encodeURIComponent(resi)}&courier=${encodeURIComponent(courier)}`);
-      result  = await r.json();
+    const targets = trkAllData.filter(r => r.resi && r.status_resi !== 'SAMPAI' && r.status_resi !== 'RETUR');
+    if (!targets.length) { showToast('Tidak ada resi yang perlu dicek.', 'info'); return; }
+    const BATCH = 5;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      const batch = targets.slice(i, i + BATCH);
+      await Promise.all(batch.map(async row => {
+        const eks    = extractEkspedisi(row.pembayaran) || row.pembayaran;
+        const result = await checkResiTracking(row.resi, eks);
+        if (!result) return;
+        await trSaveTracking(row.resi, eks, result);
+        row.status_resi            = result.stage;
+        row.status_resi_step       = result.step;
+        row.status_resi_updated_at = new Date().toISOString();
+        row.status_resi_detail     = result.detail;
+      }));
+      btn.textContent = `Mengecek... (${Math.min(i+BATCH, targets.length)}/${targets.length})`;
     }
-    const statusStr = result.data?.status || result.status || null;
-    await sb.from('cs_order_tracking').upsert({
-      resi,
-      ekspedisi,
-      status_resi:            statusStr,
-      status_resi_step:       result.data?.history?.length || null,
-      status_resi_updated_at: new Date().toISOString(),
-      status_resi_detail:     result
-    });
-    showToast('Resi ' + resi + ' diperbarui!', 'success');
-    await loadAdminTracking();
-  } catch(e) {
-    showToast('Gagal cek resi: ' + e.message, 'error');
+    updateTrkCards(trkAllData);
+    showTrkAlerts(trkAllData);
+    applyTrkFilter();
+    showToast(`✅ Selesai cek ${targets.length} resi!`, 'success');
+  } finally {
+    btn.disabled = false; btn.textContent = origLabel;
   }
 }
 
