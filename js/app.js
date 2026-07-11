@@ -354,6 +354,22 @@ async function ssOnFileChange(type, input) {
   reader.readAsDataURL(compressed);
 }
 
+// Beberapa browser/device (mode privasi anti-fingerprint, bug WebView tertentu) diam-diam
+// ngasilin canvas kosong/hitam pas drawImage — gak ada error yang kelempar, hasilnya cuma
+// blob JPEG hitam solid. Fungsi ini sample beberapa titik pixel buat deteksi itu.
+function ssCanvasLooksBlank(ctx, width, height) {
+  const cols = 5, rows = 5;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const x = Math.min(width - 1, Math.round((i + 0.5) * width / cols));
+      const y = Math.min(height - 1, Math.round((j + 0.5) * height / rows));
+      const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+      if (r !== 0 || g !== 0 || b !== 0) return false;
+    }
+  }
+  return true;
+}
+
 async function ssCompress(file, maxPx = 1200, quality = 0.75) {
   return new Promise(resolve => {
     const img = new Image();
@@ -361,13 +377,18 @@ async function ssCompress(file, maxPx = 1200, quality = 0.75) {
     img.onload = () => {
       URL.revokeObjectURL(url);
       let { width, height } = img;
+      if (!width || !height) { resolve(file); return; }
       if (width > maxPx || height > maxPx) {
         const r = Math.min(maxPx / width, maxPx / height);
         width = Math.round(width * r); height = Math.round(height * r);
       }
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      let blank = false;
+      try { blank = ssCanvasLooksBlank(ctx, width, height); } catch (e) { /* getImageData gagal, anggap aman */ }
+      if (blank) { resolve(file); return; }
       canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
@@ -598,7 +619,10 @@ function parseOrderRegex(text) {
     const l = lines[i];
 
     if (/^Nama\s*:/i.test(l)) {
-      result.nama = l.replace(/^Nama\s*:\s*/i, '').trim();
+      // Order kombo (2+ produk) sering nyelipin catatan produk singkat nempel di baris Nama pake
+      // tanda "|" (contoh: "ARIS JONO|ORI 1+MAK 1") -- bukan bagian dari nama customer, dibuang
+      // sama kayak alamat/instruksi_pengiriman di bawah.
+      result.nama = l.replace(/^Nama\s*:\s*/i, '').trim().split('|')[0].trim();
 
     } else if (/^No\.?\s*HP\s*:/i.test(l)) {
       result.hp = l.replace(/^No\.?\s*HP\s*:\s*/i, '').trim();
@@ -687,7 +711,16 @@ async function doParse() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Parse gagal');
       parsedData = json.data;
+
+      // `nama` & `keterangan` gampang meleset di jalur AI (nama kena nempelin catatan produk
+      // kombo pake "|", keterangan suka dikosongin walau instruksi prompt udah eksplisit) --
+      // koreksi pake hasil regex yang lebih deterministik buat 2 field ini spesifik, walau
+      // regexResult keseluruhan gak valid buat dipakai (field lain mungkin emang butuh AI).
+      if (regexResult.keterangan) parsedData.keterangan = regexResult.keterangan;
+      if (regexResult.nama)       parsedData.nama       = regexResult.nama;
     }
+
+    if (parsedData.nama) parsedData.nama = parsedData.nama.split('|')[0].trim();
 
     fillPreviewForm(parsedData);
     document.getElementById('preview-card').classList.add('show');
