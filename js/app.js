@@ -619,10 +619,9 @@ function parseOrderRegex(text) {
     const l = lines[i];
 
     if (/^Nama\s*:/i.test(l)) {
-      // Order kombo (2+ produk) sering nyelipin catatan produk singkat nempel di baris Nama pake
-      // tanda "|" (contoh: "ARIS JONO|ORI 1+MAK 1") -- bukan bagian dari nama customer, dibuang
-      // sama kayak alamat/instruksi_pengiriman di bawah.
-      result.nama = l.replace(/^Nama\s*:\s*/i, '').trim().split('|')[0].trim();
+      // JANGAN dipotong di tanda "|" -- bagian setelah "|" itu kode SKU (format "BUDI|YOU1")
+      // yang dibaca parseSKUFromNama()/validateSKU() buat validasi produk vs jumlah_pesanan.
+      result.nama = l.replace(/^Nama\s*:\s*/i, '').trim();
 
     } else if (/^No\.?\s*HP\s*:/i.test(l)) {
       result.hp = l.replace(/^No\.?\s*HP\s*:\s*/i, '').trim();
@@ -723,8 +722,6 @@ async function doParse() {
         if (regexResult[key]) parsedData[key] = regexResult[key];
       });
     }
-
-    if (parsedData.nama) parsedData.nama = parsedData.nama.split('|')[0].trim();
 
     fillPreviewForm(parsedData);
     document.getElementById('preview-card').classList.add('show');
@@ -1235,6 +1232,37 @@ function val(id) {
   return (document.getElementById(id)?.value || '').trim();
 }
 
+// Field yang dicek pas submit -- gabungan semua sumber validasi (wilayah, ekspedisi, rincian,
+// SKU). optional:true = boleh kosong (gak semua order ada baris keterangan/instruksi di teks
+// aslinya), sisanya dianggap wajib.
+const SUBMIT_CHECK_FIELDS = [
+  { id: 'no',           label: 'No Order' },
+  { id: 'nama',         label: 'Nama' },
+  { id: 'hp',           label: 'No HP' },
+  { id: 'alamat',       label: 'Alamat' },
+  { id: 'kelurahan',    label: 'Kelurahan' },
+  { id: 'kecamatan',    label: 'Kecamatan' },
+  { id: 'kabupaten',    label: 'Kabupaten' },
+  { id: 'provinsi',     label: 'Provinsi' },
+  { id: 'kodepos',      label: 'Kode Pos' },
+  { id: 'jumlah',       label: 'Jumlah Pesanan' },
+  { id: 'pembayaran',   label: 'Pembayaran' },
+  { id: 'rincian',      label: 'Rincian Pembayaran' },
+  { id: 'total',        label: 'Total Pembayaran' },
+  { id: 'keterangan',   label: 'Keterangan', optional: true },
+];
+
+// Ambil teks hint asli (rekomendasi dari validateWilayah/Ekspedisi/Rincian/SKU) tanpa tombol
+// interaktif (misal tombol "Pakai ini" di kodepos) biar bersih dipakai di popup konfirmasi.
+function hintText(id) {
+  const hint = document.getElementById('hint-' + id);
+  if (!hint) return '';
+  return hint.innerHTML
+    .replace(/<button[\s\S]*?<\/button>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .trim();
+}
+
 async function doSubmit() {
   const form = getFormValues();
   if (!form.nama && !form.hp) {
@@ -1242,22 +1270,25 @@ async function doSubmit() {
     return;
   }
 
-  // Cek field merah — warning konfirmasi dulu
-  const errorFields = [
-    { id: 'no',         label: 'No Order' },
-    { id: 'pembayaran', label: 'Pembayaran' },
-    { id: 'kelurahan',  label: 'Kelurahan' },
-    { id: 'kecamatan',  label: 'Kecamatan' },
-    { id: 'kabupaten',  label: 'Kabupaten' },
-    { id: 'provinsi',   label: 'Provinsi' },
-    { id: 'kodepos',    label: 'Kode Pos' },
-    { id: 'rincian',    label: 'Rincian Pembayaran' },
-    { id: 'total',      label: 'Total Pembayaran' },
-  ].filter(f => document.getElementById('f-' + f.id)?.classList.contains('val-err'));
+  // Cek tiap field: kosong (wajib diisi) ATAU ada hint error/warning dari validasi yang udah
+  // jalan pas parsing/edit -- popup nampilin ISI masalahnya + rekomendasi asli, bukan cuma nama field.
+  const problems = [];
+  SUBMIT_CHECK_FIELDS.forEach(f => {
+    const el = document.getElementById('f-' + f.id);
+    if (!el) return;
+    const isEmpty = !(el.value || '').trim();
+    if (isEmpty) {
+      if (!f.optional) problems.push(`• <strong>${f.label}</strong> — kosong, wajib diisi`);
+      return;
+    }
+    if (el.classList.contains('val-err') || el.classList.contains('val-warn')) {
+      const detail = hintText(f.id);
+      problems.push(`• <strong>${f.label}</strong>${detail ? ': ' + detail : ' — tidak valid'}`);
+    }
+  });
 
-  if (errorFields.length > 0) {
-    const labelList = errorFields.map(f => `• ${f.label}`).join('<br>');
-    document.getElementById('confirm-body').innerHTML = labelList;
+  if (problems.length > 0) {
+    document.getElementById('confirm-body').innerHTML = problems.join('<br>');
     document.getElementById('confirm-overlay').style.display = 'flex';
     return; // tunggu user klik di modal
   }
