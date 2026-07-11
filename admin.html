@@ -63,6 +63,15 @@
       SKU Produk
     </div>
 
+    <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </span>
+      Tracking Order
+    </div>
+
     <div class="nav-section" style="margin-top:1.5rem">Navigasi</div>
     <div class="nav-item" onclick="window.location.href='app.html'">
       <span class="nav-icon">
@@ -328,6 +337,84 @@
     </div>
   </div>
 
+  <!-- ══ PAGE: TRACKING ORDER ══ -->
+  <div id="page-tracking" class="page">
+    <div class="page-title">Tracking Order CS</div>
+    <div class="page-sub">Monitor status pengiriman semua orderan CS</div>
+
+    <!-- Filter bar -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem">
+      <div style="position:relative">
+        <button id="adDrp-trigger" class="btn-secondary" onclick="adDrpToggle()" style="display:flex;align-items:center;gap:6px;font-size:12px">
+          📅 <span id="adDrp-label">30 hari terakhir</span>
+        </button>
+        <div id="adDrp-dropdown" class="drp-dropdown" style="z-index:200"></div>
+      </div>
+      <select id="adTrk-cs-filter" class="f-input" style="width:auto;font-size:12px;padding:6px 10px" onchange="renderAdminTrkFiltered()">
+        <option value="">Semua CS</option>
+      </select>
+      <input id="adTrk-search" class="admin-search" placeholder="Cari nama / HP / resi..." oninput="renderAdminTrkFiltered()" style="font-size:12px" />
+      <button class="btn-secondary" onclick="loadAdminTracking()" style="font-size:12px;padding:6px 14px">↺ Refresh</button>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="admin-stat-grid" style="margin-bottom:1rem">
+      <div class="admin-stat-card">
+        <div class="ast-label">Total Order</div>
+        <div class="ast-value s-total" id="adTrk-total">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">On Proses</div>
+        <div class="ast-value s-accent" id="adTrk-proses">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Bermasalah</div>
+        <div class="ast-value s-hold" id="adTrk-undell">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Sampai</div>
+        <div class="ast-value s-kirim" id="adTrk-sampai">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Retur</div>
+        <div class="ast-value s-cancel" id="adTrk-retur">—</div>
+      </div>
+    </div>
+
+    <!-- Status tabs -->
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem">
+      <button class="btn-secondary adTrk-tab" data-key="SEMUA"         onclick="adTrkSetFilter('SEMUA')">Semua</button>
+      <button class="btn-secondary adTrk-tab" data-key="ON_PROSES"     onclick="adTrkSetFilter('ON_PROSES')">🚚 On Proses</button>
+      <button class="btn-secondary adTrk-tab" data-key="BERMASALAH"    onclick="adTrkSetFilter('BERMASALAH')">⚠️ Bermasalah</button>
+      <button class="btn-secondary adTrk-tab" data-key="SAMPAI"        onclick="adTrkSetFilter('SAMPAI')">✅ Sampai</button>
+      <button class="btn-secondary adTrk-tab" data-key="RETUR"         onclick="adTrkSetFilter('RETUR')">↩️ Retur</button>
+      <button class="btn-secondary adTrk-tab" data-key="MENUNGGU_RESI" onclick="adTrkSetFilter('MENUNGGU_RESI')">⏳ Menunggu Resi</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-scroll" style="max-height:calc(100vh - 430px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>CS</th>
+              <th>Customer</th>
+              <th>Ekspedisi</th>
+              <th>Resi</th>
+              <th>Status</th>
+              <th>Update</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="adTrk-tbody">
+            <tr><td colspan="8" class="empty-state">Pilih menu Tracking Order untuk memuat data.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main-area -->
 
 <div id="toast-wrap" class="toast-wrap"></div>
@@ -368,20 +455,29 @@ const todayStr = () => new Date().toISOString().split('T')[0];
   }
 
   await loadOverview();
+
+  // Set tab Tracking "Semua" aktif secara default
+  document.querySelectorAll('.adTrk-tab').forEach(b => {
+    const active = b.dataset.key === 'SEMUA';
+    b.style.background  = active ? 'var(--accent)' : '';
+    b.style.color       = active ? '#fff' : '';
+    b.style.borderColor = active ? 'var(--accent)' : '';
+  });
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','users','fonnte','sku'].forEach(p => {
+  ['overview','users','fonnte','sku','tracking'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk' };
+  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
-  if (name === 'users')  loadUsers();
-  if (name === 'fonnte') loadFonnte();
-  if (name === 'sku')    loadSku();
+  if (name === 'users')    loadUsers();
+  if (name === 'fonnte')   loadFonnte();
+  if (name === 'sku')      loadSku();
+  if (name === 'tracking') loadAdminTracking();
 }
 
 // ── SKU ───────────────────────────────────────────────────────────────────────
@@ -782,6 +878,407 @@ async function deleteFonnte(id, label) {
     await loadFonnte();
   } catch(e) {
     showToast('Gagal hapus: ' + e.message, 'error');
+  }
+}
+
+// ══ ADMIN TRACKING ORDER ══════════════════════════════════════════════════════
+// Shared helpers (copy dari app.js — tidak bisa import karena no build step)
+const EKSPEDISI_LIST = [
+  { key:'JNE',      pattern:/\bJNE\b/i },
+  { key:'JNT',      pattern:/\bJ[&\+]?T\b|JALUR\s*NUGRAHA/i },
+  { key:'SICEPAT',  pattern:/\bSICEPAT\b|\bSICE\b/i },
+  { key:'ANTERAJA', pattern:/\bANTERAJA\b|\bANTER\b/i },
+  { key:'NINJA',    pattern:/\bNINJA\b/i },
+  { key:'SAP',      pattern:/\bSAP\b/i },
+  { key:'LION',     pattern:/\bLION\b/i },
+  { key:'TIKI',     pattern:/\bTIKI\b/i },
+  { key:'POS',      pattern:/\bPOS\s*INDONESIA\b|\bPOS\b/i },
+  { key:'REX',      pattern:/\bREX\b/i },
+  { key:'IDEXPRESS',pattern:/\bID\s*EXPRESS\b|\bIDEX\b/i },
+  { key:'GRAB',     pattern:/\bGRAB\b/i },
+  { key:'GOJEK',    pattern:/\bGOJEK\b|\bGOSEND\b/i },
+];
+function extractEkspedisi(text) {
+  if (!text) return null;
+  for (const e of EKSPEDISI_LIST) { if (e.pattern.test(text)) return e.key; }
+  return null;
+}
+
+const TR_STAGE_META = {
+  MENUNGGU_RESI: { label:'⏳ Menunggu Resi', color:'var(--warn)',    bg:'var(--warn-light)'   },
+  BELUM_DICEK:   { label:'🔍 Belum Dicek',   color:'var(--muted)',   bg:'var(--bg)'           },
+  DIKIRIM:       { label:'🚚 Dikirim',       color:'var(--accent)',  bg:'var(--accent-light)' },
+  KOTA_TUJUAN:   { label:'🏙️ Kota Tujuan',  color:'var(--accent)',  bg:'var(--accent-light)' },
+  OTW:           { label:'🛵 OTW',           color:'var(--accent)',  bg:'var(--accent-light)' },
+  SAMPAI:        { label:'✅ Sampai',        color:'var(--success)', bg:'var(--success-light)'},
+  BERMASALAH:    { label:'⚠️ Bermasalah',    color:'var(--danger)',  bg:'var(--danger-light)' },
+  RETUR:         { label:'↩️ Retur',         color:'var(--danger)',  bg:'var(--danger-light)' },
+};
+const TR_COURIER_MAP = {
+  'JNE':'JNE','JNT':'JT','SICEPAT':'SiCepat','LION':'lion',
+  'SAP':'SAP','ANTERAJA':'anteraja','NINJA':'Ninja','IDEXPRESS':'iDexpress'
+};
+function trCardState(stage) {
+  if (stage === 'SAMPAI')     return 'delivered';
+  if (stage === 'RETUR')      return 'retur';
+  if (stage === 'BERMASALAH') return 'undell';
+  return 'proses';
+}
+function trEffectiveStage(row) {
+  if (!row.resi) return 'MENUNGGU_RESI';
+  if (!row.status_resi || !TR_STAGE_META[row.status_resi]) return 'BELUM_DICEK';
+  return row.status_resi;
+}
+function trTimeAgo(iso) {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins   = Math.floor(diffMs / 60000);
+  if (mins < 1)   return 'baru saja';
+  if (mins < 60)  return `${mins} menit lalu`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  return `${Math.floor(hours / 24)} hari lalu`;
+}
+
+// ── DRP (Date Range Picker) untuk Tracking Admin ──────────────────────────────
+const MONTHS_ADM = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+let adDrpSelStart = null, adDrpSelEnd = null, adDrpPickingEnd = false;
+let adDrpViewYear = new Date().getFullYear(), adDrpViewMonth = new Date().getMonth();
+let adDrpStart = null, adDrpEnd = null;
+
+(function() {
+  adDrpSelStart = new Date(Date.now() - 29*864e5); adDrpSelStart.setHours(0,0,0,0);
+  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
+  adDrpStart = adDrpSelStart.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  adDrpEnd   = adDrpSelEnd.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+})();
+
+function adDrpFmt(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+}
+function adDrpToggle() {
+  const dd = document.getElementById('adDrp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) { adDrpRender(); document.addEventListener('click', adDrpOutside); }
+  else document.removeEventListener('click', adDrpOutside);
+}
+function adDrpClose() {
+  document.getElementById('adDrp-dropdown').classList.remove('open');
+  document.removeEventListener('click', adDrpOutside);
+}
+function adDrpOutside(e) {
+  const dd = document.getElementById('adDrp-dropdown');
+  const tr = document.getElementById('adDrp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) adDrpClose();
+}
+function adDrpPreset(days, btn) {
+  adDrpSelStart = new Date(Date.now() - (days-1)*864e5); adDrpSelStart.setHours(0,0,0,0);
+  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  adDrpRender();
+}
+function adDrpPresetYesterday(btn) {
+  adDrpSelStart = new Date(Date.now()-864e5); adDrpSelStart.setHours(0,0,0,0);
+  adDrpSelEnd   = new Date(Date.now()-864e5); adDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  adDrpRender();
+}
+function adDrpPresetThisMonth(btn) {
+  adDrpSelStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  adDrpSelEnd   = new Date(); adDrpSelEnd.setHours(23,59,59,999);
+  document.querySelectorAll('#adDrp-dropdown .drp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  adDrpRender();
+}
+function adDrpApply() {
+  if (!adDrpSelStart) return;
+  const s = adDrpSelStart, e = adDrpSelEnd || adDrpSelStart;
+  e.setHours(23,59,59,999);
+  adDrpStart = s.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  adDrpEnd   = e.toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  const label = adDrpStart === adDrpEnd ? adDrpFmt(s) : adDrpFmt(s) + ' — ' + adDrpFmt(e);
+  document.getElementById('adDrp-label').textContent = label;
+  adDrpClose();
+  loadAdminTracking();
+}
+function adDrpClickDay(y, m, d) {
+  const clicked = new Date(y, m, d);
+  if (!adDrpSelStart || (adDrpSelStart && adDrpSelEnd)) {
+    adDrpSelStart = clicked; adDrpSelEnd = null; adDrpPickingEnd = true;
+  } else {
+    if (clicked < adDrpSelStart) { adDrpSelEnd = adDrpSelStart; adDrpSelStart = clicked; }
+    else adDrpSelEnd = clicked;
+    adDrpPickingEnd = false;
+  }
+  adDrpRender();
+}
+function adDrpRender() {
+  const y = adDrpViewYear, m = adDrpViewMonth;
+  const firstDay   = new Date(y, m, 1).getDay() || 7;
+  const daysInMon  = new Date(y, m+1, 0).getDate();
+  const prevDays   = new Date(y, m, 0).getDate();
+  const DAYS_ADM   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  let html = `<div class="drp-header">
+    <div class="drp-selected">
+      <span>${adDrpFmt(adDrpSelStart)}</span>
+      <span style="color:var(--muted)">→</span>
+      <span>${adDrpFmt(adDrpSelEnd)}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:6px">
+      <button class="drp-nav" onclick="adDrpNav(-1)">‹</button>
+      <span style="flex:1;text-align:center;font-size:12px;font-weight:600">${MONTHS_ADM[m]} ${y}</span>
+      <button class="drp-nav" onclick="adDrpNav(1)">›</button>
+    </div>
+    <div class="drp-grid">
+      ${DAYS_ADM.map(d=>`<div class="drp-day-label">${d}</div>`).join('')}`;
+  for (let i = firstDay-1; i > 0; i--) html += `<button class="drp-day other-month" onclick="adDrpNav(-1)">${prevDays-i+1}</button>`;
+  for (let d = 1; d <= daysInMon; d++) {
+    const cur = new Date(y, m, d);
+    const isS = adDrpSelStart && cur.getTime() === new Date(adDrpSelStart.getFullYear(), adDrpSelStart.getMonth(), adDrpSelStart.getDate()).getTime();
+    const isE = adDrpSelEnd   && cur.getTime() === new Date(adDrpSelEnd.getFullYear(),   adDrpSelEnd.getMonth(),   adDrpSelEnd.getDate()).getTime();
+    const inR = adDrpSelStart && adDrpSelEnd && cur > adDrpSelStart && cur < adDrpSelEnd;
+    let cls   = 'drp-day' + (isS?' drp-start':'') + (isE?' drp-end':'') + (inR?' drp-in-range':'');
+    html += `<button class="${cls}" onclick="adDrpClickDay(${y},${m},${d})">${d}</button>`;
+  }
+  let extra = firstDay-1+daysInMon, nd = 1;
+  while (extra % 7 !== 0) { html += `<button class="drp-day other-month" onclick="adDrpNav(1)">${nd++}</button>`; extra++; }
+  html += `</div></div>
+  <div class="drp-presets">
+    <button class="drp-preset active" onclick="adDrpPreset(30,this)">30 hari</button>
+    <button class="drp-preset" onclick="adDrpPreset(7,this)">7 hari</button>
+    <button class="drp-preset" onclick="adDrpPresetYesterday(this)">Kemarin</button>
+    <button class="drp-preset" onclick="adDrpPresetThisMonth(this)">Bulan ini</button>
+  </div>
+  <div class="drp-footer"><button class="drp-apply" onclick="adDrpApply()">Terapkan</button></div>`;
+  document.getElementById('adDrp-dropdown').innerHTML = html;
+}
+function adDrpNav(dir) {
+  adDrpViewMonth += dir;
+  if (adDrpViewMonth > 11) { adDrpViewMonth = 0; adDrpViewYear++; }
+  if (adDrpViewMonth < 0)  { adDrpViewMonth = 11; adDrpViewYear--; }
+  adDrpRender();
+}
+
+// ── Data & Filter state ───────────────────────────────────────────────────────
+let adTrkAllData = [];
+let adTrkFilter  = 'SEMUA';
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+async function loadAdminTracking() {
+  const tbody = document.getElementById('adTrk-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Memuat...</td></tr>';
+
+  try {
+    // 1. Semua orderan_masuk di rentang tanggal (semua CS)
+    const { data: masukData, error: masukErr } = await sb.from('orderan_masuk')
+      .select('hp, tanggal, cs_nama')
+      .gte('tanggal', adDrpStart)
+      .lte('tanggal', adDrpEnd);
+    if (masukErr) throw masukErr;
+
+    const masukList = masukData || [];
+    if (!masukList.length) {
+      adTrkAllData = [];
+      adTrkUpdateCards([]);
+      adTrkFillCSDropdown([]);
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada order di periode ini.</td></tr>';
+      return;
+    }
+
+    // 2. Build hpTanggalMap + csNamaMap
+    const hpTanggalMap = {};
+    const csNamaMap    = {};
+    masukList.forEach(r => {
+      let hp = (r.hp || '').replace(/\D/g,'');
+      if (hp.startsWith('62')) hp = hp.slice(2);
+      if (hp.startsWith('0'))  hp = hp.slice(1);
+      if (!hp) return;
+      if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
+      const tgl = (r.tanggal || '').slice(0,10);
+      if (tgl) {
+        hpTanggalMap[hp].add(tgl);
+        const key = hp + '_' + tgl;
+        if (!csNamaMap[key]) csNamaMap[key] = r.cs_nama || '—';
+      }
+    });
+
+    const hpList = Object.keys(hpTanggalMap);
+    if (!hpList.length) {
+      adTrkAllData = []; adTrkUpdateCards([]); adTrkFillCSDropdown([]);
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada data.</td></tr>';
+      return;
+    }
+
+    // 3. Query all_orderan
+    const { data: allData, error: allErr } = await sb.from('all_orderan')
+      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+      .eq('sumber','cs_input')
+      .in('hp', hpList)
+      .gte('tanggal', adDrpStart)
+      .lte('tanggal', adDrpEnd)
+      .order('tanggal',{ascending:false})
+      .limit(1000);
+    if (allErr) throw allErr;
+
+    // 4. Filter HP+tanggal match + tambah cs_nama
+    const filtered = (allData||[])
+      .filter(r => {
+        const tgl = (r.tanggal||'').slice(0,10);
+        return hpTanggalMap[r.hp]?.has(tgl);
+      })
+      .map(r => {
+        const tgl = (r.tanggal||'').slice(0,10);
+        return { ...r, cs_nama: csNamaMap[r.hp+'_'+tgl] || '—' };
+      });
+
+    // 5. Merge cs_order_tracking
+    const resiList = [...new Set(filtered.map(r => (r.resi||'').trim()).filter(Boolean))];
+    let trkByResi  = {};
+    if (resiList.length) {
+      const { data: trkData } = await sb.from('cs_order_tracking')
+        .select('resi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+        .in('resi', resiList);
+      (trkData||[]).forEach(t => { trkByResi[t.resi] = t; });
+    }
+
+    adTrkAllData = filtered.map(r => {
+      const t = r.resi ? trkByResi[r.resi.trim()] : null;
+      return {
+        ...r,
+        status_resi:            t?.status_resi            || null,
+        status_resi_step:       t?.status_resi_step       || null,
+        status_resi_updated_at: t?.status_resi_updated_at || null,
+        status_resi_detail:     t?.status_resi_detail     || null,
+      };
+    });
+
+    adTrkUpdateCards(adTrkAllData);
+    adTrkFillCSDropdown(adTrkAllData);
+    renderAdminTrkFiltered();
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Error: ${e.message}</td></tr>`;
+    showToast('Gagal load tracking: ' + e.message, 'error');
+  }
+}
+
+function adTrkFillCSDropdown(list) {
+  const sel   = document.getElementById('adTrk-cs-filter');
+  const curr  = sel.value;
+  const names = [...new Set(list.map(o => o.cs_nama).filter(n => n && n !== '—'))].sort();
+  sel.innerHTML = '<option value="">Semua CS</option>' +
+    names.map(n => `<option value="${n}" ${n===curr?'selected':''}>${n}</option>`).join('');
+}
+
+function adTrkSetFilter(key) {
+  adTrkFilter = key;
+  document.querySelectorAll('.adTrk-tab').forEach(b => {
+    const active = b.dataset.key === key;
+    b.style.background  = active ? 'var(--accent)' : '';
+    b.style.color       = active ? '#fff' : '';
+    b.style.borderColor = active ? 'var(--accent)' : '';
+  });
+  renderAdminTrkFiltered();
+}
+
+function renderAdminTrkFiltered() {
+  const csFilter = document.getElementById('adTrk-cs-filter')?.value || '';
+  const search   = (document.getElementById('adTrk-search')?.value || '').toLowerCase();
+  let list = adTrkAllData;
+  if (csFilter) list = list.filter(o => o.cs_nama === csFilter);
+  if (adTrkFilter !== 'SEMUA') {
+    const ON_PROSES_STAGES = ['MENUNGGU_RESI','BELUM_DICEK','DIKIRIM','KOTA_TUJUAN','OTW'];
+    if (adTrkFilter === 'ON_PROSES') {
+      list = list.filter(o => ON_PROSES_STAGES.includes(trEffectiveStage(o)));
+    } else {
+      list = list.filter(o => trEffectiveStage(o) === adTrkFilter);
+    }
+  }
+  if (search) {
+    list = list.filter(o =>
+      (o.nama    ||'').toLowerCase().includes(search) ||
+      (o.hp      ||'').includes(search) ||
+      (o.resi    ||'').toLowerCase().includes(search) ||
+      (o.cs_nama ||'').toLowerCase().includes(search)
+    );
+  }
+  renderAdminTrkTable(list);
+}
+
+function adTrkUpdateCards(list) {
+  const get = key => list.filter(o => trCardState(trEffectiveStage(o)) === key).length;
+  document.getElementById('adTrk-total').textContent  = list.length || '—';
+  document.getElementById('adTrk-proses').textContent = get('proses')    || '—';
+  document.getElementById('adTrk-undell').textContent = get('undell')    || '—';
+  document.getElementById('adTrk-sampai').textContent = get('delivered') || '—';
+  document.getElementById('adTrk-retur').textContent  = get('retur')     || '—';
+}
+
+function renderAdminTrkTable(list) {
+  const tbody = document.getElementById('adTrk-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada data.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map((o, i) => {
+    const stage  = trEffectiveStage(o);
+    const meta   = TR_STAGE_META[stage];
+    const eks    = extractEkspedisi(o.pembayaran) || '—';
+    const hp08   = (o.hp||'').startsWith('0') ? (o.hp||'') : '0'+(o.hp||'');
+    const ago    = o.status_resi_updated_at ? trTimeAgo(o.status_resi_updated_at) : '—';
+    const resiCell = o.resi
+      ? `<a href="https://cekresi.com/?noresi=${o.resi}" target="_blank" style="font-family:monospace;font-size:11px;color:var(--accent)">${o.resi}</a>`
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    const eksSafe = (eks||'').replace(/'/g,"\\'");
+    const resiSafe = (o.resi||'').replace(/'/g,"\\'");
+    const aksiBtn  = o.resi
+      ? `<button class="btn-sm btn-sm-accent" onclick="adTrkCekResi('${resiSafe}','${eksSafe}')">Cek</button>`
+      : '';
+    return `<tr>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:11px">${i+1}</td>
+      <td style="font-weight:600;font-size:12px">${o.cs_nama||'—'}</td>
+      <td>
+        <div style="font-weight:600;font-size:12px">${o.nama||'—'}</div>
+        <div style="color:var(--muted);font-size:11px;font-family:var(--mono)">${hp08}</div>
+      </td>
+      <td style="font-size:12px;font-weight:600">${eks}</td>
+      <td>${resiCell}</td>
+      <td><span class="badge" style="background:${meta.bg};color:${meta.color};white-space:nowrap">${meta.label}</span></td>
+      <td style="color:var(--muted);font-size:11px">${ago}</td>
+      <td>${aksiBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function adTrkCekResi(resi, ekspedisi) {
+  showToast('Mengecek ' + resi + '...', 'info');
+  try {
+    const courier = TR_COURIER_MAP[ekspedisi?.toUpperCase()] || ekspedisi;
+    const isPOS   = /^POS/i.test(ekspedisi||'');
+    let result;
+    if (isPOS) {
+      const r = await fetch(`/api/pos-tracking?resi=${encodeURIComponent(resi)}`);
+      result  = await r.json();
+    } else {
+      const r = await fetch(`/api/tracking?tracking_number=${encodeURIComponent(resi)}&courier=${encodeURIComponent(courier)}`);
+      result  = await r.json();
+    }
+    const statusStr = result.data?.status || result.status || null;
+    await sb.from('cs_order_tracking').upsert({
+      resi,
+      ekspedisi,
+      status_resi:            statusStr,
+      status_resi_step:       result.data?.history?.length || null,
+      status_resi_updated_at: new Date().toISOString(),
+      status_resi_detail:     result
+    });
+    showToast('Resi ' + resi + ' diperbarui!', 'success');
+    await loadAdminTracking();
+  } catch(e) {
+    showToast('Gagal cek resi: ' + e.message, 'error');
   }
 }
 
