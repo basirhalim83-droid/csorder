@@ -870,10 +870,6 @@ async function validateWilayah() {
 function confirmSubmitCancel() {
   document.getElementById('confirm-overlay').style.display = 'none';
 }
-function confirmSubmitOk() {
-  document.getElementById('confirm-overlay').style.display = 'none';
-  doSubmitExec();
-}
 
 function applyKodepos(val) {
   const el = document.getElementById('f-kodepos');
