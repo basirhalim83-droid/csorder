@@ -190,16 +190,27 @@ const STAGE_LABEL = {
   RETUR:      '↩️ Retur'
 };
 
+// Semua kemungkinan format HP yang sama (08xxx/8xxx/628xxx) — orderan_masuk.hp formatnya
+// gak terjamin konsisten (tergantung apa adanya CS ketik), jadi query harus toleran ke-3nya.
+function hpVariants(raw) {
+  let s = (raw || '').replace(/\D/g, '');
+  if (!s) return [];
+  if (s.startsWith('62')) s = s.slice(2);
+  else if (s.startsWith('0')) s = s.slice(1);
+  const noZero = s;
+  return [...new Set(['0' + noZero, noZero, '62' + noZero])];
+}
+
 // Notif WA ke CS pemilik order pas resi-nya baru masuk status Bermasalah/Retur (bukan tiap cron jalan)
 async function notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, stage) {
-  let hp = (order.hp || '').replace(/\D/g, '');
-  if (!hp) return false;
-  const hp08 = hp.startsWith('0') ? hp : '0' + hp;
+  const hpVar = hpVariants(order.hp);
+  if (!hpVar.length) return false;
+  const hp08 = hpVar[0];
   const tgl  = (order.tanggal || '').slice(0, 10);
 
   const masukFilter = new URLSearchParams({
     select: 'cs_id',
-    hp: `eq.${hp08}`,
+    hp: `in.(${hpVar.join(',')})`,
     tanggal: `eq.${tgl}`,
     limit: '1'
   });
