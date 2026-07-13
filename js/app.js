@@ -1225,7 +1225,8 @@ async function doCekOngkir() {
         : 'low';
       const scoreLabel = c.unsupported ? '✕' : (c.score ?? '—');
       return `
-      <div class="ongkir-card${c.unsupported ? ' unsupported' : ''}">
+      <div class="ongkir-card${c.unsupported ? ' unsupported' : ''}${c.recommended ? ' recommended' : ''}">
+        ${c.recommended ? '<div class="ongkir-reco-badge">⭐ Rekomendasi Mengantar</div>' : ''}
         <div class="ongkir-card-head">
           <div class="ongkir-card-name">
             <div class="ongkir-icon">${(ONGKIR_DISPLAY[c.key] || c.key).slice(0, 2).toUpperCase()}</div>
