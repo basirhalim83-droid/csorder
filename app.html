@@ -39,6 +39,9 @@
     <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
       <span class="nav-icon">📦</span> Tracking Order
     </div>
+    <div class="nav-item" id="nav-ongkir" onclick="switchPage('ongkir')">
+      <span class="nav-icon">🚚</span> Cek Ongkir
+    </div>
     <div class="nav-section">Akun</div>
     <div class="nav-item" id="nav-setting" onclick="switchPage('setting')">
       <span class="nav-icon">⚙️</span> Setting
@@ -334,6 +337,7 @@ Keterangan: Bonus masker"></textarea>
           <label class="f-label">Rincian Pembayaran</label>
           <input class="f-input" id="f-rincian" type="text" placeholder="13000|0|5000|0|230000" />
           <div class="val-hint" id="hint-rincian"></div>
+          <div class="val-hint" id="hint-ongkir-check"></div>
         </div>
         <div class="f-group">
           <label class="f-label">Keterangan</label>
@@ -531,6 +535,42 @@ Keterangan: Bonus masker"></textarea>
     <div id="trk-cards" class="trk-grid"></div>
   </div>
 
+  <!-- ══════════════════════════════════════
+       PAGE: CEK ONGKIR
+  ═══════════════════════════════════════ -->
+  <div class="page" id="page-ongkir">
+    <div class="page-title">Cek Ongkir</div>
+    <div class="page-sub">Estimasi ongkir semua ekspedisi dari gudang ke alamat customer — gak perlu buka web lain</div>
+
+    <div class="card">
+      <div class="card-title">Cari Tujuan</div>
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="f-group">
+          <label class="f-label">Kecamatan</label>
+          <input class="f-input" id="ongkir-kecamatan" type="text" placeholder="Contoh: Kebayoran Baru" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Kabupaten/Kota</label>
+          <input class="f-input" id="ongkir-kabupaten" type="text" placeholder="Contoh: Jakarta Selatan" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Berat (kg)</label>
+          <input class="f-input" id="ongkir-berat" type="text" inputmode="decimal" value="1" />
+        </div>
+      </div>
+      <div class="parse-actions">
+        <button class="btn-parse" id="btn-cek-ongkir" onclick="doCekOngkir()">🔍 Cek Ongkir</button>
+        <span class="loading-txt" id="loading-ongkir">Mengambil estimasi...</span>
+      </div>
+      <div id="ongkir-error" style="display:none;margin-top:10px;font-size:12px;color:#ef4444"></div>
+    </div>
+
+    <div class="card" id="ongkir-result-card" style="display:none">
+      <div class="card-title">Estimasi Ongkir <span id="ongkir-dest-label" style="font-weight:400;color:var(--muted)"></span></div>
+      <div id="ongkir-result-list"></div>
+    </div>
+  </div>
+
 </div><!-- end main-area -->
 
 <!-- ── BOTTOM NAV (mobile) ── -->
@@ -569,6 +609,17 @@ Keterangan: Bonus masker"></textarea>
         </svg>
       </div>
       <span class="bnav-label">Tracking</span>
+    </button>
+
+    <button class="bnav-item" id="bnav-ongkir" onclick="switchPage('ongkir')">
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <path d="M3 17h1a2 2 0 1 0 4 0h6a2 2 0 1 0 4 0h1v-4l-3-4h-3V6H3v11z"/>
+          <circle cx="6" cy="17" r="0.1"/>
+          <circle cx="16" cy="17" r="0.1"/>
+        </svg>
+      </div>
+      <span class="bnav-label">Ongkir</span>
     </button>
 
     <button class="bnav-item" id="bnav-setting" onclick="switchPage('setting')">
