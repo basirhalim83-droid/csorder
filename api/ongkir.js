@@ -82,6 +82,7 @@ module.exports = async function handler(req, res) {
     // Skor performa kurir (opsional) -- kalau API key belum diset/gagal, skor dikosongin
     // aja, gak ganggu harga/estimasi yang udah didapat.
     let scoreMap = {};
+    let recommendedKey = null;
     const apiKey = process.env.MENGANTAR_API_KEY;
     if (apiKey) {
       try {
@@ -96,6 +97,7 @@ module.exports = async function handler(req, res) {
         const perfJson = await perfR.json();
         if (perfJson?.success) {
           (perfJson.data?.couriers || []).forEach(c => { scoreMap[c.key.toLowerCase()] = c.score; });
+          recommendedKey = (perfJson.data?.recommended || '').toLowerCase() || null;
         }
       } catch (e) { /* diamkan -- skor optional */ }
     }
@@ -103,13 +105,15 @@ module.exports = async function handler(req, res) {
     const couriers = Object.entries(COURIER_MAP).map(([key, apiCourierKey]) => {
       const d = estJson.data?.[apiCourierKey];
       const score = scoreMap[apiCourierKey.toLowerCase()];
-      if (!d) return { key, unsupported: true, score: score ?? null };
+      const recommended = recommendedKey === apiCourierKey.toLowerCase();
+      if (!d) return { key, unsupported: true, score: score ?? null, recommended };
       return {
         key,
         price: d.price,
         unsupported: !!d.unsupported,
         estimate_delivery: d.estimatedDate || d.estimate_delivery || '',
         score: score ?? null,
+        recommended,
       };
     });
 
