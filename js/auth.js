@@ -82,6 +82,17 @@ function normalizeHP(hp) {
   return s;
 }
 
+// Semua kemungkinan format HP yang sama (08xxx/8xxx/628xxx) — dipakai buat query
+// tabel yang formatnya gak terjamin konsisten (all_orderan/orderan_masuk pernah
+// kesimpen beda format karena bug normalisasi lama, lihat catatan 2026-07-13).
+function hpVariants(hp) {
+  const norm = normalizeHP(hp); // 08xxx
+  if (!norm) return [];
+  const noZero = norm.slice(1);       // 8xxx
+  const with62 = '62' + noZero;       // 628xxx
+  return [...new Set([norm, noZero, with62])];
+}
+
 // ── SUPABASE SQL SETUP ────────────────────────────────────────────────────────
 // Jalankan SQL ini di Supabase SQL Editor sebelum pertama kali digunakan:
 //

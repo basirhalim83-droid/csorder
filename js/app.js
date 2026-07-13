@@ -1310,8 +1310,7 @@ async function doSubmitExec() {
 
   try {
     const today   = getOrderDate(); // pakai cutoff logic, bukan todayStr()
-    const hpNorm  = normalizeHP(form.hp);           // format 08xxx (untuk orderan_masuk)
-    const hpDB    = hpNorm.startsWith('0') ? hpNorm.slice(1) : hpNorm; // format 8xxx (untuk all_orderan)
+    const hpVar   = hpVariants(form.hp);             // [08xxx, 8xxx, 628xxx] — buat query, jaga-jaga format tersimpan beda-beda
     const profile  = currentProfile;
 
     // 1. Insert ke orderan_masuk
@@ -1341,17 +1340,17 @@ async function doSubmitExec() {
 
     const [dupTodayRes, allOrderanRes, kpStatsRes, eksRes] = await Promise.all([
       // Cek dup hari ini (HP sama, hari sama, bukan row ini sendiri)
-      hpNorm ? sb.from('orderan_masuk')
+      hpVar.length ? sb.from('orderan_masuk')
         .select('id, nama, cs_nama, created_at')
-        .eq('hp', hpNorm)
+        .in('hp', hpVar)
         .eq('tanggal', today)
         .neq('id', insertedId)
         .limit(5) : Promise.resolve({ data: [] }),
 
       // Cek dup all team + ambil status_akhir & resi untuk deteksi RTS
-      hpDB ? sb.from('all_orderan')
+      hpVar.length ? sb.from('all_orderan')
         .select('nama, hp, tanggal, cs, team, status_akhir, resi')
-        .eq('hp', hpDB)
+        .in('hp', hpVar)
         .limit(10) : Promise.resolve({ data: [] }),
 
       // Cek wilayah rawan dari kodepos_stats
@@ -2154,18 +2153,19 @@ function renderTrkTabs() {
 async function trFetchTrackingRows(masukList, range) {
   if (!masukList.length) return [];
 
-  // 1. Kumpulkan pasangan HP+tanggal dari orderan_masuk
+  // 1. Kumpulkan pasangan HP+tanggal dari orderan_masuk (key = HP dinormalisasi, biar konsisten
+  //    apapun format aslinya di orderan_masuk)
   const hpTanggalMap = {};
+  const hpVariantSet = new Set();
   masukList.forEach(r => {
-    let hp = (r.hp || '').replace(/\D/g, '');
-    if (hp.startsWith('62')) hp = hp.slice(2);
-    if (hp.startsWith('0'))  hp = hp.slice(1);
+    const hp = normalizeHP(r.hp);
     if (!hp) return;
     if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
     if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
+    hpVariants(r.hp).forEach(v => hpVariantSet.add(v));
   });
 
-  const hpList = Object.keys(hpTanggalMap);
+  const hpList = [...hpVariantSet]; // semua varian format (08xxx/8xxx/628xxx) — jaga-jaga all_orderan kesimpen beda format
   if (!hpList.length) return [];
 
   // 2. Query all_orderan: filter sumber='cs_input' + HP (+ rentang tanggal kalau dikasih)
@@ -2181,9 +2181,10 @@ async function trFetchTrackingRows(masukList, range) {
   if (allErr) throw allErr;
 
   // 3. Filter tambahan: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
+  //    (hp dinormalisasi dulu sebelum lookup, karena hpTanggalMap key-nya format 08xxx)
   const filtered = (allData || []).filter(r => {
     const tgl = (r.tanggal || '').slice(0, 10);
-    return hpTanggalMap[r.hp]?.has(tgl);
+    return hpTanggalMap[normalizeHP(r.hp)]?.has(tgl);
   });
 
   // 4. Merge status tracking live dari cs_order_tracking (hasil cron/manual check), keyed by resi
