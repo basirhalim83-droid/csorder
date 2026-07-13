@@ -359,6 +359,8 @@ tr.row-rts{background:var(--warn-light)!important}
 .ongkir-score.none{background:var(--bg);color:var(--muted)}
 .ongkir-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);padding:3px 0}
 .ongkir-row strong{color:var(--text);font-weight:700}
+.ongkir-card.recommended{border-color:var(--accent)}
+.ongkir-reco-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:99px;margin-bottom:8px}
 
 /* ── DATE RANGE PICKER ─────────────────────────────────────────────────────── */
 .drp-trigger{display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
