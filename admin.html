@@ -72,6 +72,18 @@
       Tracking Order
     </div>
 
+    <div class="nav-item" id="nav-wilayahbaru" onclick="switchPage('wilayahbaru')" style="display:flex;align-items:center;justify-content:space-between">
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+        </span>
+        Wilayah Baru
+      </span>
+      <span id="wilayahbaru-badge" style="display:none;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:99px;padding:1px 7px"></span>
+    </div>
+
     <div class="nav-section" style="margin-top:1.5rem">Navigasi</div>
     <div class="nav-item" onclick="window.location.href='app.html'">
       <span class="nav-icon">
@@ -430,6 +442,36 @@
     <div id="trk-cards" class="trk-grid"></div>
   </div>
 
+  <!-- ══ PAGE: WILAYAH BARU ══ -->
+  <div id="page-wilayahbaru" class="page">
+    <div class="page-title">Wilayah Baru</div>
+    <div class="page-sub">Laporan CS soal alamat (pemekaran/belum terdaftar) yang gak kedetect di data wilayah Mengantar</div>
+
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700">Laporan Wilayah</span>
+        <button class="btn-secondary" onclick="loadWilayahBaru()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 280px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Alamat</th>
+              <th>Dilaporkan Oleh</th>
+              <th>Tanggal Lapor</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="wilayahbaru-tbody">
+            <tr><td colspan="6" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main-area -->
 
 <div id="toast-wrap" class="toast-wrap"></div>
@@ -487,21 +529,87 @@ const todayStr = () => new Date().toISOString().split('T')[0];
   }
 
   await loadOverview();
+  await refreshWilayahBaruBadge();
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','users','fonnte','sku','tracking'].forEach(p => {
+  ['overview','users','fonnte','sku','tracking','wilayahbaru'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS' };
+  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
-  if (name === 'users')    loadUsers();
-  if (name === 'fonnte')   loadFonnte();
-  if (name === 'sku')      loadSku();
-  if (name === 'tracking') loadTracking();
+  if (name === 'users')       loadUsers();
+  if (name === 'fonnte')      loadFonnte();
+  if (name === 'sku')         loadSku();
+  if (name === 'tracking')    loadTracking();
+  if (name === 'wilayahbaru') loadWilayahBaru();
+}
+
+// ══ WILAYAH BARU ═════════════════════════════════════════════════════════════
+async function refreshWilayahBaruBadge() {
+  const badge = document.getElementById('wilayahbaru-badge');
+  try {
+    const { count } = await sb.from('wilayah_override')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+    else           { badge.style.display = 'none'; }
+  } catch (e) { badge.style.display = 'none'; }
+}
+
+async function loadWilayahBaru() {
+  const tbody = document.getElementById('wilayahbaru-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Memuat...</td></tr>';
+  try {
+    const { data, error } = await sb.from('wilayah_override')
+      .select('*').order('reported_at', { ascending: false });
+    if (error) throw error;
+    const list = data || [];
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada laporan wilayah.</td></tr>';
+      return;
+    }
+    const statusBadge = s => s === 'approved' ? '<span class="badge badge-ok">Disetujui</span>'
+      : s === 'rejected' ? '<span class="badge badge-cancel">Ditolak</span>'
+      : '<span class="badge badge-hold">Pending</span>';
+    tbody.innerHTML = list.map((r, i) => `
+      <tr>
+        <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
+        <td style="font-size:12px">${[r.kelurahan, r.kecamatan, r.kabupaten, r.provinsi].filter(Boolean).join(', ')}${r.kodepos ? ' — ' + r.kodepos : ''}</td>
+        <td style="font-size:12px">${r.reported_by || '—'}</td>
+        <td style="color:var(--muted);font-size:12px">${new Date(r.reported_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          ${r.status === 'pending' ? `
+            <button class="btn-sm btn-sm-accent" onclick="reviewWilayahBaru('${r.id}','approved')">Setujui</button>
+            <button class="btn-sm btn-sm-danger" onclick="reviewWilayahBaru('${r.id}','rejected')">Tolak</button>
+          ` : '<span style="color:var(--muted);font-size:12px">—</span>'}
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function reviewWilayahBaru(id, status) {
+  const label = status === 'approved' ? 'setujui' : 'tolak';
+  if (!confirm(`Yakin mau ${label} laporan wilayah ini?`)) return;
+  try {
+    const { error } = await sb.from('wilayah_override').update({
+      status,
+      reviewed_by: currentProfile?.nama || currentUser?.email || null,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) throw error;
+    showToast(status === 'approved' ? 'Wilayah disetujui.' : 'Laporan ditolak.', 'success');
+    await loadWilayahBaru();
+    await refreshWilayahBaruBadge();
+  } catch (e) {
+    showToast('Gagal: ' + e.message, 'error');
+  }
 }
 
 // ── SKU ───────────────────────────────────────────────────────────────────────
