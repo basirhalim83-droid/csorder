@@ -1126,17 +1126,63 @@ const ONGKIR_DISPLAY = {
   NINJA: 'Ninja', LION: 'Lion', POS: 'POS Indonesia', SAP: 'SAP', IDEXPRESS: 'ID Express',
 };
 
+// Autocomplete alamat (mode=search) -- niru UX "Cek Ongkos Kirim" Mengantar
+let _ongkirSearchTimer = null;
+let ongkirSelectedDest = null; // { id, kecamatan, kabupaten, provinsi, label }
+
+function scheduleOngkirSearch() {
+  clearTimeout(_ongkirSearchTimer);
+  _ongkirSearchTimer = setTimeout(runOngkirSearch, 300);
+}
+
+async function runOngkirSearch() {
+  const box = document.getElementById('ongkir-suggest');
+  const keyword = document.getElementById('ongkir-search').value.trim();
+
+  // Ketikan berubah dari yang udah dipilih -> batalin pilihan lama
+  if (ongkirSelectedDest && ongkirSelectedDest.label !== keyword) ongkirSelectedDest = null;
+
+  if (keyword.length < 3) { box.style.display = 'none'; return; }
+
+  try {
+    const r = await fetch(`/api/ongkir?mode=search&keyword=${encodeURIComponent(keyword)}`);
+    const json = await r.json();
+    if (!json.ok || !json.data.length) {
+      box.innerHTML = '<div class="ongkir-suggest-empty">Alamat tidak ditemukan</div>';
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = json.data.map((d, i) => `
+      <div class="ongkir-suggest-item" data-idx="${i}">${d.label}</div>
+    `).join('');
+    box.style.display = 'block';
+    box.querySelectorAll('.ongkir-suggest-item').forEach((el, i) => {
+      el.onclick = () => {
+        const d = json.data[i];
+        ongkirSelectedDest = d;
+        document.getElementById('ongkir-search').value = d.label;
+        box.style.display = 'none';
+      };
+    });
+  } catch (e) { box.style.display = 'none'; }
+}
+
+document.getElementById('ongkir-search')?.addEventListener('input', scheduleOngkirSearch);
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('ongkir-suggest');
+  const input = document.getElementById('ongkir-search');
+  if (box && !box.contains(e.target) && e.target !== input) box.style.display = 'none';
+});
+
 async function doCekOngkir() {
-  const kec   = document.getElementById('ongkir-kecamatan').value.trim();
-  const kab   = document.getElementById('ongkir-kabupaten').value.trim();
   const berat = parseFloat(document.getElementById('ongkir-berat').value) || 1;
   const errEl  = document.getElementById('ongkir-error');
   const resultCard = document.getElementById('ongkir-result-card');
   errEl.style.display = 'none';
   resultCard.style.display = 'none';
 
-  if (!kec && !kab) {
-    errEl.textContent = 'Isi minimal Kecamatan atau Kabupaten.';
+  if (!ongkirSelectedDest) {
+    errEl.textContent = 'Pilih alamat tujuan dari daftar saran dulu.';
     errEl.style.display = 'block';
     return;
   }
@@ -1147,8 +1193,15 @@ async function doCekOngkir() {
   loading.classList.add('show');
 
   try {
-    const keyword = [kec, kab].filter(Boolean).join(' ');
-    const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(keyword)}&weight=${berat}`);
+    const d = ongkirSelectedDest;
+    const params = new URLSearchParams({
+      destination_id: d.id,
+      kecamatan: d.kecamatan,
+      kabupaten: d.kabupaten,
+      provinsi: d.provinsi,
+      weight: berat,
+    });
+    const r = await fetch(`/api/ongkir?${params.toString()}`);
     const json = await r.json();
     if (!json.ok) {
       errEl.textContent = json.reason || 'Gagal ambil estimasi ongkir.';
@@ -1156,7 +1209,7 @@ async function doCekOngkir() {
       return;
     }
     document.getElementById('ongkir-dest-label').textContent =
-      `— ${json.destination.kecamatan}, ${json.destination.kabupaten}`;
+      `Tujuan: ${json.destination.kecamatan}, ${json.destination.kabupaten}`;
 
     const sorted = [...json.couriers].sort((a, b) => {
       if (a.unsupported && !b.unsupported) return 1;
@@ -1164,17 +1217,26 @@ async function doCekOngkir() {
       return (a.price || 0) - (b.price || 0);
     });
     const fmt = n => n.toLocaleString('id-ID');
-    document.getElementById('ongkir-result-list').innerHTML = sorted.map(c => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-weight:600;font-size:13px">${ONGKIR_DISPLAY[c.key] || c.key}</div>
-          <div style="font-size:11px;color:var(--muted)">${c.estimate_delivery || '-'}</div>
+    document.getElementById('ongkir-result-list').innerHTML = sorted.map(c => {
+      const scoreClass = c.unsupported ? 'none'
+        : c.score == null ? 'none'
+        : c.score >= 95 ? 'high'
+        : c.score >= 80 ? 'mid'
+        : 'low';
+      const scoreLabel = c.unsupported ? '✕' : (c.score ?? '—');
+      return `
+      <div class="ongkir-card${c.unsupported ? ' unsupported' : ''}">
+        <div class="ongkir-card-head">
+          <div class="ongkir-card-name">
+            <div class="ongkir-icon">${(ONGKIR_DISPLAY[c.key] || c.key).slice(0, 2).toUpperCase()}</div>
+            <span>${ONGKIR_DISPLAY[c.key] || c.key}</span>
+          </div>
+          <div class="ongkir-score ${scoreClass}">${scoreLabel}</div>
         </div>
-        <div style="font-weight:700;font-size:14px;${c.unsupported ? 'color:var(--muted)' : ''}">
-          ${c.unsupported ? 'Tidak tersedia' : 'Rp' + fmt(c.price)}
-        </div>
-      </div>
-    `).join('');
+        <div class="ongkir-row"><span>Biaya Pengiriman</span><strong>${c.unsupported ? '—' : 'Rp' + fmt(c.price)}</strong></div>
+        <div class="ongkir-row"><span>Estimasi</span><strong>${c.unsupported ? '—' : (c.estimate_delivery || '—')}</strong></div>
+      </div>`;
+    }).join('');
     resultCard.style.display = 'block';
   } catch (e) {
     errEl.textContent = 'Gagal terhubung ke server.';
