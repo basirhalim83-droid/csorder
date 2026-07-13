@@ -786,6 +786,7 @@ async function validateWilayah() {
 
   if (!kel && !kec && !kab && !prov) return;
   valClearAll();
+  hideWilayahLaporBox();
 
   const norm = s => (s||'').trim().toUpperCase().replace(/^(KABUPATEN|KOTA|KAB\.?)\s*/i, '');
 
@@ -797,11 +798,21 @@ async function validateWilayah() {
     const list = js.data || [];
 
     if (!list.length) {
-      // Tidak ada hasil sama sekali
+      // Tidak ketemu sama sekali di data Mengantar -- cek dulu apa udah pernah
+      // di-approve manual sebagai wilayah baru/pemekaran sebelum nge-flag merah.
+      const override = kel && kec && kab ? await checkWilayahOverride(kel, kec, kab) : null;
+      if (override) {
+        valSetField('kelurahan', 'ok', '✓ Wilayah baru (disetujui admin)');
+        valSetField('kecamatan', 'ok', '✓ Wilayah baru (disetujui admin)');
+        valSetField('kabupaten', 'ok', '✓ Wilayah baru (disetujui admin)');
+        valSetField('provinsi',  'ok', '✓ Wilayah baru (disetujui admin)');
+        return;
+      }
       valSetField('kelurahan', 'err');
       valSetField('kecamatan', 'err');
       valSetField('kabupaten', 'err');
       valSetField('provinsi',  'err');
+      if (kel && kec && kab) showWilayahLaporBox(kel, kec, kab, prov, kpos);
       return;
     }
 
@@ -866,6 +877,79 @@ async function validateWilayah() {
     }
 
   } catch(_) { /* gagal → skip validasi */ }
+}
+
+// ── WILAYAH BARU/PEMEKARAN: override manual (approved admin) ─────────────────
+// Data Mengantar kadang belum kedetect wilayah pemekaran baru -- daripada
+// nge-block order valid selamanya, CS bisa lapor sekali, admin approve sekali,
+// abis itu kombo alamat yang sama otomatis lolos buat semua order berikutnya.
+async function checkWilayahOverride(kel, kec, kab) {
+  try {
+    const { data } = await sb.from('wilayah_override')
+      .select('id')
+      .eq('status', 'approved')
+      .ilike('kelurahan', kel)
+      .ilike('kecamatan', kec)
+      .ilike('kabupaten', kab)
+      .limit(1);
+    return data && data[0];
+  } catch (e) { return null; }
+}
+
+function hideWilayahLaporBox() {
+  const box = document.getElementById('wilayah-lapor-box');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+async function showWilayahLaporBox(kel, kec, kab, prov, kpos) {
+  const box = document.getElementById('wilayah-lapor-box');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<span style="font-size:12px;color:var(--muted)">Mengecek status laporan wilayah...</span>';
+
+  try {
+    const { data } = await sb.from('wilayah_override')
+      .select('status, reported_at, catatan')
+      .ilike('kelurahan', kel)
+      .ilike('kecamatan', kec)
+      .ilike('kabupaten', kab)
+      .order('reported_at', { ascending: false })
+      .limit(1);
+    const existing = data && data[0];
+
+    if (existing?.status === 'pending') {
+      box.innerHTML = `<span style="font-size:12px;color:var(--warn)">⏳ Wilayah ini udah dilaporkan, menunggu approval admin (${new Date(existing.reported_at).toLocaleDateString('id-ID')}). Order gak bisa disubmit dulu sampai disetujui.</span>`;
+    } else if (existing?.status === 'rejected') {
+      box.innerHTML = `<span style="font-size:12px;color:var(--danger)">✗ Ditolak admin${existing.catatan ? ': ' + existing.catatan : ''}. Cek ulang alamatnya sama customer.</span>`;
+    } else {
+      box.innerHTML = '<button type="button" class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="laporWilayahBaru()">🚩 Lapor Wilayah Baru (pemekaran/belum terdaftar)</button>';
+    }
+  } catch (e) {
+    box.innerHTML = '<button type="button" class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="laporWilayahBaru()">🚩 Lapor Wilayah Baru (pemekaran/belum terdaftar)</button>';
+  }
+}
+
+async function laporWilayahBaru() {
+  const kel  = val('f-kelurahan');
+  const kec  = val('f-kecamatan');
+  const kab  = val('f-kabupaten');
+  const prov = val('f-provinsi');
+  const kpos = val('f-kodepos');
+  const box  = document.getElementById('wilayah-lapor-box');
+  if (!kel || !kec || !kab) return;
+
+  try {
+    const { error } = await sb.from('wilayah_override').insert({
+      kelurahan: kel, kecamatan: kec, kabupaten: kab, provinsi: prov, kodepos: kpos,
+      status: 'pending',
+      reported_by: currentProfile?.nama || currentUser?.email || null,
+    });
+    if (error) throw error;
+    box.innerHTML = '<span style="font-size:12px;color:var(--warn)">⏳ Dilaporkan! Order bisa disubmit setelah admin approve.</span>';
+    showToast('Wilayah baru dilaporkan ke admin.', 'success');
+  } catch (e) {
+    showToast('Gagal lapor: ' + e.message, 'error');
+  }
 }
 
 function confirmSubmitCancel() {
