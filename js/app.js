@@ -1088,9 +1088,8 @@ async function validateOngkirTarif() {
 
   const parts = rincianVal.split('|').map(s => parseInt(s.trim(), 10));
   if (parts.length !== 5 || parts.some(isNaN)) return;
-  const [ongkir, potOngkir] = parts;
-  const ongkirBersih = ongkir - potOngkir;
-  if (!ongkirBersih) return;
+  const [ongkir] = parts; // ongkir KOTOR -- pot.ongkir itu diskon promo CS ke customer,
+  if (!ongkir) return;    // bukan bagian tarif asli, jadi gak ikut dibandingin ke estimasi
 
   let json;
   try {
@@ -1103,11 +1102,11 @@ async function validateOngkirTarif() {
   if (!match || match.unsupported || !match.price) return;
 
   const fmt = n => n.toLocaleString('id-ID');
-  const pct = Math.abs(ongkirBersih - match.price) / match.price * 100;
+  const pct = Math.abs(ongkir - match.price) / match.price * 100;
 
   if (pct > 5) {
     hint.classList.add('warn');
-    hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkirBersih)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+    hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
   } else {
     hint.classList.add('ok');
     hint.textContent = `✓ Ongkir sesuai estimasi (Rp${fmt(match.price)})`;
