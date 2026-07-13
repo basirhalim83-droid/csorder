@@ -1234,15 +1234,15 @@ let trkAllData = [];
 async function trFetchTrackingRows(masukList, range) {
   if (!masukList.length) return [];
   const hpTanggalMap = {};
+  const hpVariantSet = new Set();
   masukList.forEach(r => {
-    let hp = (r.hp || '').replace(/\D/g, '');
-    if (hp.startsWith('62')) hp = hp.slice(2);
-    if (hp.startsWith('0'))  hp = hp.slice(1);
+    const hp = normalizeHP(r.hp);
     if (!hp) return;
     if (!hpTanggalMap[hp]) hpTanggalMap[hp] = new Set();
     if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
+    hpVariants(r.hp).forEach(v => hpVariantSet.add(v));
   });
-  const hpList = Object.keys(hpTanggalMap);
+  const hpList = [...hpVariantSet]; // semua varian format (08xxx/8xxx/628xxx) — jaga-jaga all_orderan kesimpen beda format
   if (!hpList.length) return [];
   let q = sb.from('all_orderan')
     .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
@@ -1255,7 +1255,7 @@ async function trFetchTrackingRows(masukList, range) {
   if (allErr) throw allErr;
   const filtered = (allData || []).filter(r => {
     const tgl = (r.tanggal || '').slice(0, 10);
-    return hpTanggalMap[r.hp]?.has(tgl);
+    return hpTanggalMap[normalizeHP(r.hp)]?.has(tgl);
   });
   const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
   let trkByResi = {};
@@ -1302,9 +1302,7 @@ async function loadTracking() {
     // Build csNamaMap: hp_8xxx_tanggal → cs_nama
     const csNamaMap = {};
     masukList.forEach(r => {
-      let hp = (r.hp||'').replace(/\D/g,'');
-      if (hp.startsWith('62')) hp = hp.slice(2);
-      if (hp.startsWith('0'))  hp = hp.slice(1);
+      const hp = normalizeHP(r.hp||'');
       const tgl = (r.tanggal||'').slice(0,10);
       if (hp && tgl) csNamaMap[hp+'_'+tgl] = r.cs_nama || '—';
     });
@@ -1312,7 +1310,7 @@ async function loadTracking() {
     // Tambahkan cs_nama ke setiap row
     trkAllData.forEach(r => {
       const tgl = (r.tanggal||'').slice(0,10);
-      r.cs_nama = csNamaMap[r.hp+'_'+tgl] || '—';
+      r.cs_nama = csNamaMap[normalizeHP(r.hp)+'_'+tgl] || '—';
     });
     updateTrkCards(trkAllData);
     showTrkAlerts(trkAllData);
