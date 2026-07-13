@@ -544,15 +544,15 @@ Keterangan: Bonus masker"></textarea>
 
     <div class="card">
       <div class="card-title">Cari Tujuan</div>
+      <div class="form-grid cols-1" style="margin-bottom:10px">
+        <div class="f-group" style="position:relative">
+          <label class="f-label">Alamat Tujuan</label>
+          <input class="f-input" id="ongkir-search" type="text" autocomplete="off"
+                 placeholder="Ketik kecamatan / kabupaten / kelurahan..." />
+          <div class="ongkir-suggest-box" id="ongkir-suggest" style="display:none"></div>
+        </div>
+      </div>
       <div class="form-grid" style="margin-bottom:10px">
-        <div class="f-group">
-          <label class="f-label">Kecamatan</label>
-          <input class="f-input" id="ongkir-kecamatan" type="text" placeholder="Contoh: Kebayoran Baru" />
-        </div>
-        <div class="f-group">
-          <label class="f-label">Kabupaten/Kota</label>
-          <input class="f-input" id="ongkir-kabupaten" type="text" placeholder="Contoh: Jakarta Selatan" />
-        </div>
         <div class="f-group">
           <label class="f-label">Berat (kg)</label>
           <input class="f-input" id="ongkir-berat" type="text" inputmode="decimal" value="1" />
@@ -565,9 +565,9 @@ Keterangan: Bonus masker"></textarea>
       <div id="ongkir-error" style="display:none;margin-top:10px;font-size:12px;color:#ef4444"></div>
     </div>
 
-    <div class="card" id="ongkir-result-card" style="display:none">
-      <div class="card-title">Estimasi Ongkir <span id="ongkir-dest-label" style="font-weight:400;color:var(--muted)"></span></div>
-      <div id="ongkir-result-list"></div>
+    <div id="ongkir-result-card" style="display:none">
+      <div class="page-sub" style="margin:0 0 10px" id="ongkir-dest-label"></div>
+      <div id="ongkir-result-list" class="trk-grid"></div>
     </div>
   </div>
 
