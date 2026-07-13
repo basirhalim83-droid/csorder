@@ -205,7 +205,7 @@ function drpNav(dir) {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['dashboard','upload','tracking','setting'].forEach(p => {
+  ['dashboard','upload','tracking','setting','ongkir'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     // Sidebar nav (desktop)
     const navEl = document.getElementById('nav-'+p);
@@ -214,7 +214,7 @@ function switchPage(name) {
     const bnavEl = document.getElementById('bnav-'+p);
     if (bnavEl) bnavEl.classList.toggle('active', p===name);
   });
-  const titles = { dashboard:'Dashboard', upload:'Upload Order', tracking:'Tracking Order', setting:'Setting' };
+  const titles = { dashboard:'Dashboard', upload:'Upload Order', tracking:'Tracking Order', setting:'Setting', ongkir:'Cek Ongkir' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') loadDashboard();
   if (name === 'upload')    { loadHistoryMini(); checkAndShowLockBanner(); }
@@ -732,6 +732,7 @@ async function doParse() {
     validateRincian();
     validateSKU();
     validateReceiverScore();
+    validateOngkirTarif();
 
     document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch(e) {
@@ -1070,6 +1071,120 @@ function validateRincian() {
   }
 }
 
+// ── CEK ONGKIR: advisory ke tarif asli Mengantar (soft, gak nge-block submit) ──
+// Sengaja gak pakai valSetField()/class val-warn di f-rincian -- biar gak ikut
+// kena hard-block SUBMIT_CHECK_FIELDS. Ini murni saran, CS tetap boleh submit.
+async function validateOngkirTarif() {
+  const hint = document.getElementById('hint-ongkir-check');
+  if (!hint) return;
+  hint.className = 'val-hint';
+  hint.textContent = '';
+
+  const kec  = val('f-kecamatan');
+  const kab  = val('f-kabupaten');
+  const eksp = extractEkspedisi(val('f-no'));
+  const rincianVal = val('f-rincian');
+  if (!kec || !kab || !eksp || !rincianVal) return;
+
+  const parts = rincianVal.split('|').map(s => parseInt(s.trim(), 10));
+  if (parts.length !== 5 || parts.some(isNaN)) return;
+  const [ongkir, potOngkir] = parts;
+  const ongkirBersih = ongkir - potOngkir;
+  if (!ongkirBersih) return;
+
+  let json;
+  try {
+    const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(kec + ' ' + kab)}&weight=1`);
+    json = await r.json();
+  } catch (e) { return; } // gagal ambil data -> diamkan, gak ganggu submit
+  if (!json?.ok) return;
+
+  const match = json.couriers.find(c => c.key === eksp);
+  if (!match || match.unsupported || !match.price) return;
+
+  const fmt = n => n.toLocaleString('id-ID');
+  const pct = Math.abs(ongkirBersih - match.price) / match.price * 100;
+
+  if (pct > 5) {
+    hint.classList.add('warn');
+    hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkirBersih)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+  } else {
+    hint.classList.add('ok');
+    hint.textContent = `✓ Ongkir sesuai estimasi (Rp${fmt(match.price)})`;
+  }
+}
+
+let _ongkirCheckTimer = null;
+function scheduleOngkirCheck() {
+  clearTimeout(_ongkirCheckTimer);
+  _ongkirCheckTimer = setTimeout(validateOngkirTarif, 800);
+}
+
+// ── CEK ONGKIR: halaman mandiri (tools CS, gak perlu buka web Mengantar) ───────
+const ONGKIR_DISPLAY = {
+  JNE: 'JNE', JNT: 'J&T', SICEPAT: 'SiCepat', ANTERAJA: 'AnterAja',
+  NINJA: 'Ninja', LION: 'Lion', POS: 'POS Indonesia', SAP: 'SAP', IDEXPRESS: 'ID Express',
+};
+
+async function doCekOngkir() {
+  const kec   = document.getElementById('ongkir-kecamatan').value.trim();
+  const kab   = document.getElementById('ongkir-kabupaten').value.trim();
+  const berat = parseFloat(document.getElementById('ongkir-berat').value) || 1;
+  const errEl  = document.getElementById('ongkir-error');
+  const resultCard = document.getElementById('ongkir-result-card');
+  errEl.style.display = 'none';
+  resultCard.style.display = 'none';
+
+  if (!kec && !kab) {
+    errEl.textContent = 'Isi minimal Kecamatan atau Kabupaten.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('btn-cek-ongkir');
+  const loading = document.getElementById('loading-ongkir');
+  btn.disabled = true;
+  loading.classList.add('show');
+
+  try {
+    const keyword = [kec, kab].filter(Boolean).join(' ');
+    const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(keyword)}&weight=${berat}`);
+    const json = await r.json();
+    if (!json.ok) {
+      errEl.textContent = json.reason || 'Gagal ambil estimasi ongkir.';
+      errEl.style.display = 'block';
+      return;
+    }
+    document.getElementById('ongkir-dest-label').textContent =
+      `— ${json.destination.kecamatan}, ${json.destination.kabupaten}`;
+
+    const sorted = [...json.couriers].sort((a, b) => {
+      if (a.unsupported && !b.unsupported) return 1;
+      if (!a.unsupported && b.unsupported) return -1;
+      return (a.price || 0) - (b.price || 0);
+    });
+    const fmt = n => n.toLocaleString('id-ID');
+    document.getElementById('ongkir-result-list').innerHTML = sorted.map(c => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:13px">${ONGKIR_DISPLAY[c.key] || c.key}</div>
+          <div style="font-size:11px;color:var(--muted)">${c.estimate_delivery || '-'}</div>
+        </div>
+        <div style="font-weight:700;font-size:14px;${c.unsupported ? 'color:var(--muted)' : ''}">
+          ${c.unsupported ? 'Tidak tersedia' : 'Rp' + fmt(c.price)}
+        </div>
+      </div>
+    `).join('');
+    resultCard.style.display = 'block';
+  } catch (e) {
+    errEl.textContent = 'Gagal terhubung ke server.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove('show');
+  }
+}
+
 // ── GRADE / SKOR PENERIMA (Mengantar) ──────────────────────────────────────────
 let lastReceiverScore = null; // dikirim ke orderan_masuk pas submit
 
@@ -1196,6 +1311,10 @@ document.getElementById('f-hp')?.addEventListener('input', scheduleGradeCheck);
 ['f-rincian','f-total'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', validateRincian);
+});
+['f-kecamatan','f-kabupaten','f-no','f-pembayaran','f-rincian'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', scheduleOngkirCheck);
 });
 ['f-nama','f-jumlah','f-keterangan'].forEach(id => {
   const el = document.getElementById(id);
