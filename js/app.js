@@ -294,7 +294,7 @@ function openSSModal(orderId) {
 
   const existing = Array.isArray(ssCurrentOrder.ss_urls) ? ssCurrentOrder.ss_urls : [];
   const { needIklan, needDeal } = ssNeeds(ssCurrentOrder);
-  const locked = checkSSLock();
+  const locked = checkSSLock(ssCurrentOrder);
 
   document.getElementById('ss-modal-sub').textContent = ssCurrentOrder.nama || '';
 
@@ -1725,11 +1725,13 @@ function checkUploadLock() {
 }
 
 // Beda dari checkUploadLock (yang cuma ngunci 08:00–08:59 lalu kebuka lagi jam 9 buat siklus
-// hari berikutnya) — upload SS ditutup PERMANEN begitu masuk jam 8 pagi, gak kebuka lagi
-// sampai lewat tengah malam (siklus hari baru). Reset otomatis jam 00:00 karena getWIBHour()
-// balik ke bawah 8.
-function checkSSLock() {
-  return getWIBHour() >= 8;
+// hari berikutnya) — upload SS dikunci PERMANEN per-order begitu siklus (tanggal) order itu
+// sudah lewat, bukan cuma ngecek jam sekarang. Order dari siklus yang MASIH aktif tetap bisa
+// upload kapan aja meski udah malam; baru kekunci begitu getOrderDate() gonta ke tanggal baru
+// (jam 8 pagi berikutnya).
+function checkSSLock(order) {
+  if (!order || !order.tanggal) return getWIBHour() >= 8;
+  return String(order.tanggal).slice(0, 10) !== getOrderDate();
 }
 
 let _lockTimer = null;
