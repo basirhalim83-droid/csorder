@@ -22,34 +22,94 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  const keyword = (req.query.keyword || '').trim();
-  const weight  = parseFloat(req.query.weight) || 1;
-  if (!keyword) return res.status(400).json({ error: 'keyword wajib diisi' });
+  const keyword       = (req.query.keyword || '').trim();
+  const destinationId = (req.query.destination_id || '').trim();
+  const weight        = parseFloat(req.query.weight) || 1;
+
+  // mode=search: cuma cari kandidat alamat (buat autocomplete), gak hitung ongkir
+  if (req.query.mode === 'search') {
+    if (!keyword) return res.status(400).json({ error: 'keyword wajib diisi' });
+    try {
+      const searchR = await fetch(
+        `${BASE_URL}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      const searchJson = await searchR.json();
+      const list = (searchJson?.data || []).slice(0, 10).map(d => ({
+        id:        d._id,
+        provinsi:  d.PROVINCE_NAME,
+        kabupaten: d.CITY_NAME,
+        kecamatan: d.DISTRICT_NAME,
+        kelurahan: d.SUBDISTRICT_NAME,
+        label: `${d.PROVINCE_NAME}, ${d.CITY_NAME}, ${d.DISTRICT_NAME}, ${d.SUBDISTRICT_NAME}`,
+      }));
+      return res.status(200).json({ ok: true, data: list });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  if (!keyword && !destinationId) return res.status(400).json({ error: 'keyword atau destination_id wajib diisi' });
 
   try {
-    const searchR = await fetch(
-      `${BASE_URL}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
-      { headers: { Accept: 'application/json' } }
-    );
-    const searchJson = await searchR.json();
-    const dest = searchJson?.data?.[0];
-    if (!dest) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
+    let dest;
+    if (destinationId) {
+      // CS udah pilih alamat presisi dari dropdown autocomplete -- skip pencarian ulang
+      dest = {
+        _id: destinationId,
+        DISTRICT_NAME: req.query.kecamatan  || '',
+        CITY_NAME:     req.query.kabupaten  || '',
+        PROVINCE_NAME: req.query.provinsi   || '',
+      };
+    } else {
+      const searchR = await fetch(
+        `${BASE_URL}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      const searchJson = await searchR.json();
+      dest = searchJson?.data?.[0];
+      if (!dest) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
+    }
 
+    // allEstimate3PL = tarif mentah TANPA diskon/promo Mengantar (beda dari allEstimatePublic)
     const estR = await fetch(
-      `${BASE_URL}/api/order/allEstimatePublic?origin_id=${ORIGIN_ID}&destination_id=${dest._id}&weight=${weight}`,
+      `${BASE_URL}/api/order/allEstimate3PL?origin_id=${ORIGIN_ID}&destination_id=${dest._id}&weight=${weight}`,
       { headers: { Accept: 'application/json' } }
     );
     const estJson = await estR.json();
     if (!estJson?.success) return res.status(200).json({ ok: false, reason: 'Gagal ambil estimasi ongkir' });
 
-    const couriers = Object.entries(COURIER_MAP).map(([key, apiKey]) => {
-      const d = estJson.data?.[apiKey];
-      if (!d) return { key, unsupported: true };
+    // Skor performa kurir (opsional) -- kalau API key belum diset/gagal, skor dikosongin
+    // aja, gak ganggu harga/estimasi yang udah didapat.
+    let scoreMap = {};
+    const apiKey = process.env.MENGANTAR_API_KEY;
+    if (apiKey) {
+      try {
+        const perfR = await fetch(
+          `${BASE_URL}/api/public/${apiKey}/order/getPerformancePublic`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ city: dest.CITY_NAME, allEstimateData: estJson.data }),
+          }
+        );
+        const perfJson = await perfR.json();
+        if (perfJson?.success) {
+          (perfJson.data?.couriers || []).forEach(c => { scoreMap[c.key.toLowerCase()] = c.score; });
+        }
+      } catch (e) { /* diamkan -- skor optional */ }
+    }
+
+    const couriers = Object.entries(COURIER_MAP).map(([key, apiCourierKey]) => {
+      const d = estJson.data?.[apiCourierKey];
+      const score = scoreMap[apiCourierKey.toLowerCase()];
+      if (!d) return { key, unsupported: true, score: score ?? null };
       return {
         key,
         price: d.price,
         unsupported: !!d.unsupported,
-        estimate_delivery: d.estimate_delivery || d.estimatedDate || '',
+        estimate_delivery: d.estimatedDate || d.estimate_delivery || '',
+        score: score ?? null,
       };
     });
 
