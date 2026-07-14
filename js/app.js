@@ -1498,7 +1498,8 @@ function val(id) {
 const SUBMIT_CHECK_FIELDS = [
   { id: 'no',           label: 'No Order' },
   { id: 'nama',         label: 'Nama' },
-  { id: 'hp',           label: 'No HP' },
+  // hp sengaja tidak dimasukkan — val-err/val-warn di f-hp hanya dari grade receiver score,
+  // bukan error format. Grade D → wajib SS saja, tidak boleh blokir submit.
   { id: 'alamat',       label: 'Alamat' },
   { id: 'kelurahan',    label: 'Kelurahan' },
   { id: 'kecamatan',    label: 'Kecamatan' },
