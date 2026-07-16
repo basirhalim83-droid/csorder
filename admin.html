@@ -241,8 +241,11 @@
 
       <div class="form-grid" style="margin-bottom:10px">
         <div class="f-group">
-          <label class="f-label">Label / Nama Nomor</label>
-          <input class="f-input" id="fn-label" placeholder="cth: WA Kantor 1" />
+          <label class="f-label">Tipe Nomor</label>
+          <select class="f-input" id="fn-label">
+            <option value="validator">Validator — notif ACC/HOLD/CANCEL ke CS</option>
+            <option value="notif-bermasalah">Notif Bermasalah — alert paket bermasalah ke CS</option>
+          </select>
         </div>
         <div class="f-group">
           <label class="f-label">Device / Nomor WA Pengirim <span style="color:var(--muted)">(opsional, jika multi-device Fonnte)</span></label>
@@ -1063,7 +1066,7 @@ async function loadFonnte() {
 
       return `<tr>
         <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
-        <td style="font-weight:600">${r.label||'—'}</td>
+        <td style="font-weight:600">${{validator:'Validator',['notif-bermasalah']:'Notif Bermasalah'}[r.label]||r.label||'—'}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${keyMask}</td>
         <td style="font-family:var(--mono);font-size:12px">${r.device||'—'}</td>
         <td>${statusBadge}</td>
