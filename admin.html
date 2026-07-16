@@ -1339,6 +1339,7 @@ function renderTrkTabs() {
 // ── Data ──────────────────────────────────────────────────────────────────────
 let trkAllData = [];
 
+// Dipakai oleh app.html (per cs_id). Admin pakai loadTracking() sendiri yang lebih efisien.
 async function trFetchTrackingRows(masukList, range) {
   if (!masukList.length) return [];
   const hpTanggalMap = {};
@@ -1350,7 +1351,7 @@ async function trFetchTrackingRows(masukList, range) {
     if (r.tanggal) hpTanggalMap[hp].add(r.tanggal.slice(0, 10));
     hpVariants(r.hp).forEach(v => hpVariantSet.add(v));
   });
-  const hpList = [...hpVariantSet]; // semua varian format (08xxx/8xxx/628xxx) — jaga-jaga all_orderan kesimpen beda format
+  const hpList = [...hpVariantSet];
   if (!hpList.length) return [];
   let q = sb.from('all_orderan')
     .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
@@ -1383,7 +1384,7 @@ async function trFetchTrackingRows(masukList, range) {
   return filtered;
 }
 
-// ADMIN MODIFICATION: tidak filter by cs_id, ambil cs_nama dari orderan_masuk
+// ADMIN: query all_orderan langsung by date+sumber (tanpa hpVariants), jauh lebih cepat
 async function loadTracking() {
   if (!currentUser) return;
   renderTrkTabs();
@@ -1392,14 +1393,18 @@ async function loadTracking() {
   const cardsEl  = document.getElementById('trk-cards');
   if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
   try {
-    // Ambil SEMUA orderan_masuk (bukan filter cs_id), include cs_nama
-    const { data: masukData, error: masukErr } = await sb.from('orderan_masuk')
-      .select('hp, nama, tanggal, cs_nama')
+    // Step 1: Query all_orderan langsung by sumber+tanggal — tidak perlu hpVariants
+    const { data: allData, error: allErr } = await sb.from('all_orderan')
+      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+      .eq('sumber', 'cs_input')
       .gte('tanggal', trkStart)
-      .lte('tanggal', trkEnd);
-    if (masukErr) throw masukErr;
-    const masukList = masukData || [];
-    if (!masukList.length) {
+      .lte('tanggal', trkEnd)
+      .order('tanggal', { ascending: false })
+      .limit(1000);
+    if (allErr) throw allErr;
+    const rows = allData || [];
+
+    if (!rows.length) {
       trkAllData = [];
       updateTrkCards([]);
       document.getElementById('trk-alerts').innerHTML = '';
@@ -1407,19 +1412,43 @@ async function loadTracking() {
       if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di periode ini.</div>';
       return;
     }
-    // Build csNamaMap: hp_8xxx_tanggal → cs_nama
+
+    // Step 2: Ambil cs_nama dari orderan_masuk (satu query, bukan per-HP)
+    const { data: masukData } = await sb.from('orderan_masuk')
+      .select('hp, tanggal, cs_nama')
+      .gte('tanggal', trkStart)
+      .lte('tanggal', trkEnd);
     const csNamaMap = {};
-    masukList.forEach(r => {
-      const hp = normalizeHP(r.hp||'');
-      const tgl = (r.tanggal||'').slice(0,10);
-      if (hp && tgl) csNamaMap[hp+'_'+tgl] = r.cs_nama || '—';
+    (masukData || []).forEach(r => {
+      const hp  = normalizeHP(r.hp || '');
+      const tgl = (r.tanggal || '').slice(0, 10);
+      if (hp && tgl) csNamaMap[hp + '_' + tgl] = r.cs_nama || '—';
     });
-    trkAllData = await trFetchTrackingRows(masukList, { start: trkStart, end: trkEnd });
-    // Tambahkan cs_nama ke setiap row
-    trkAllData.forEach(r => {
-      const tgl = (r.tanggal||'').slice(0,10);
-      r.cs_nama = csNamaMap[normalizeHP(r.hp)+'_'+tgl] || '—';
+
+    // Step 3: Attach cs_nama ke setiap row
+    rows.forEach(r => {
+      const tgl = (r.tanggal || '').slice(0, 10);
+      r.cs_nama = csNamaMap[normalizeHP(r.hp || '') + '_' + tgl] || '—';
     });
+
+    // Step 4: Fetch tracking cache (cs_order_tracking) untuk semua resi sekaligus
+    const resiList = [...new Set(rows.map(r => (r.resi || '').trim()).filter(Boolean))];
+    let trkByResi = {};
+    if (resiList.length) {
+      const { data: trkData } = await sb.from('cs_order_tracking')
+        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+        .in('resi', resiList);
+      (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+    }
+    rows.forEach(r => {
+      const t = r.resi ? trkByResi[r.resi.trim()] : null;
+      r.status_resi            = t?.status_resi            || null;
+      r.status_resi_step       = t?.status_resi_step       || null;
+      r.status_resi_updated_at = t?.status_resi_updated_at || null;
+      r.status_resi_detail     = t?.status_resi_detail     || null;
+    });
+
+    trkAllData = rows;
     updateTrkCards(trkAllData);
     showTrkAlerts(trkAllData);
     updateCsFilter();
