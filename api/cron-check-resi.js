@@ -31,8 +31,19 @@ function extractEkspedisi(text) {
   return null;
 }
 
-const ROWS_PER_RUN = 300; // batasi per invocation biar tidak kena timeout serverless
-const CONCURRENCY = 8;
+const ROWS_PER_RUN = 50;  // Vercel Hobby 10s limit — aman ~50 resi/run
+const NEW_SLOTS    = 15;  // prioritas resi baru (belum pernah masuk tracking)
+const ROT_SLOTS    = 35;  // rotation: resi aktif terlama belum dicek
+const CONCURRENCY  = 8;
+const API_TIMEOUT_MS = 7000; // per-resi timeout agar 1 resi lambat tidak block batch
+
+// Promise.race timeout — underlying fetch tetap jalan tapi hasilnya di-ignore
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout')), ms))
+  ]);
+}
 
 // Sinyal "bermasalah" terstruktur per kurir (bukan tebak kata) — disinkronkan manual dengan js/app.js:
 // - JNE (via Mengantar): history[].type.group === 'UNDELIVERED' atau type.tag === 'actionRequired'
@@ -256,60 +267,119 @@ module.exports = async function handler(req, res) {
   let checked = 0, updated = 0, errors = 0, notified = 0;
 
   try {
-    // 1. Ambil kandidat resi dari all_orderan (order masuk lewat csorder-main)
-    const candFilter = new URLSearchParams({
+    const seenResi = new Set();
+    const targets   = []; // { resi, ekspedisi, hp, tanggal, nama, prevStatus }
+
+    // ── SLOT 1: Resi baru (belum pernah masuk cs_order_tracking) ──────────────
+    // Ambil 120 order terbaru dari all_orderan (14 hari terakhir) lalu cek mana
+    // yang belum ada di tracking sama sekali → prioritas dicek duluan.
+    const since14d = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
+    const recentFilter = new URLSearchParams({
       select: 'resi,pembayaran,hp,tanggal,nama',
       sumber: 'eq.cs_input',
       resi: 'not.is.null',
-      order: 'id',
-      limit: String(ROWS_PER_RUN)
+      created_at: `gte.${since14d}`,
+      order: 'id.desc',
+      limit: '120'
     });
-    const candRes = await fetch(`${SUPABASE_URL}/rest/v1/all_orderan?${candFilter.toString()}`, { headers: sbHeaders });
-    const candidates = await candRes.json();
-    if (!Array.isArray(candidates)) throw new Error('Gagal ambil data all_orderan: ' + JSON.stringify(candidates));
+    const recentRows = await (await fetch(`${SUPABASE_URL}/rest/v1/all_orderan?${recentFilter}`, { headers: sbHeaders })).json();
 
-    // Dedup by resi, simpan info order buat notif nanti
-    const byResi = {};
-    candidates.forEach(c => {
-      const resi = (c.resi || '').trim();
-      if (!resi || byResi[resi]) return;
-      byResi[resi] = {
-        ekspedisi: extractEkspedisi(c.pembayaran || ''),
-        hp: c.hp, tanggal: c.tanggal, nama: c.nama
-      };
+    // Dedup by resi
+    const recentByResi = {};
+    (Array.isArray(recentRows) ? recentRows : []).forEach(r => {
+      const resi = (r.resi || '').trim();
+      if (resi && !recentByResi[resi]) recentByResi[resi] = r;
     });
-    const resiList = Object.keys(byResi);
-    if (!resiList.length) {
-      res.status(200).json({ checked, updated, errors, notified, rows_this_run: 0 });
-      return;
+    const recentResiList = Object.keys(recentByResi);
+
+    // Cek mana yang sudah ada di cs_order_tracking (status apapun)
+    const alreadyInTracking = new Set();
+    if (recentResiList.length) {
+      const chkFilter = new URLSearchParams({
+        select: 'resi',
+        resi: `in.(${recentResiList.map(r => `"${r.replace(/"/g, '')}"`).join(',')})`
+      });
+      const chkRows = await (await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?${chkFilter}`, { headers: sbHeaders })).json();
+      (Array.isArray(chkRows) ? chkRows : []).forEach(r => alreadyInTracking.add(r.resi));
     }
 
-    // 2. Ambil status existing, skip yang udah final, ingat status sebelumnya buat deteksi transisi
-    const existFilter = new URLSearchParams({
-      select: 'resi,status_resi',
-      resi: `in.(${resiList.map(r => `"${r.replace(/"/g,'')}"`).join(',')})`
-    });
-    const existRes = await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?${existFilter.toString()}`, { headers: sbHeaders });
-    const existing = await existRes.json();
-    const prevStatusMap = {};
-    (Array.isArray(existing) ? existing : []).forEach(r => { prevStatusMap[r.resi] = r.status_resi; });
+    for (const resi of recentResiList) {
+      if (targets.length >= NEW_SLOTS) break;
+      if (alreadyInTracking.has(resi)) continue;
+      seenResi.add(resi);
+      const r = recentByResi[resi];
+      targets.push({
+        resi,
+        ekspedisi: extractEkspedisi(r.pembayaran || ''),
+        hp: r.hp, tanggal: r.tanggal, nama: r.nama,
+        prevStatus: null
+      });
+    }
 
-    const targets = resiList.filter(r => prevStatusMap[r] !== 'SAMPAI' && prevStatusMap[r] !== 'RETUR');
+    // ── SLOT 2: Rotation — resi aktif terlama belum dicek ─────────────────────
+    // Query dari cs_order_tracking: tidak SAMPAI/RETUR, urut updated_at ASC
+    // (yang paling lama dicek = paling atas antrian).
+    const rotFilter = new URLSearchParams({
+      select: 'resi,ekspedisi,status_resi',
+      status_resi: 'not.in.(SAMPAI,RETUR)',
+      order: 'status_resi_updated_at.asc.nullsfirst',
+      limit: String(ROT_SLOTS + 20) // ambil lebih, biar ada buffer setelah dedup
+    });
+    const rotRows = await (await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?${rotFilter}`, { headers: sbHeaders })).json();
+
+    // Kumpulkan resi rotation yang belum masuk targets
+    const rotCandidates = (Array.isArray(rotRows) ? rotRows : []).filter(r => !seenResi.has(r.resi));
+    const rotResiList   = rotCandidates.map(r => r.resi).slice(0, ROT_SLOTS);
+
+    // Fetch info order (hp, tanggal, nama) untuk kebutuhan notif WA
+    const rotOrderInfo = {};
+    if (rotResiList.length) {
+      const orderFilter = new URLSearchParams({
+        select: 'resi,pembayaran,hp,tanggal,nama',
+        sumber: 'eq.cs_input',
+        resi: `in.(${rotResiList.map(r => `"${r.replace(/"/g, '')}"`).join(',')})`,
+        limit: String(rotResiList.length)
+      });
+      const orderRows = await (await fetch(`${SUPABASE_URL}/rest/v1/all_orderan?${orderFilter}`, { headers: sbHeaders })).json();
+      (Array.isArray(orderRows) ? orderRows : []).forEach(r => {
+        if (!rotOrderInfo[r.resi]) rotOrderInfo[r.resi] = r;
+      });
+    }
+
+    for (const row of rotCandidates) {
+      if (targets.length >= ROWS_PER_RUN) break;
+      seenResi.add(row.resi);
+      const info = rotOrderInfo[row.resi] || {};
+      targets.push({
+        resi: row.resi,
+        ekspedisi: row.ekspedisi || extractEkspedisi(info.pembayaran || ''),
+        hp: info.hp, tanggal: info.tanggal, nama: info.nama,
+        prevStatus: row.status_resi
+      });
+    }
+
+    if (!targets.length) {
+      return res.status(200).json({ checked: 0, updated: 0, errors: 0, notified: 0, new_resi: 0 });
+    }
+
+    // ── Cek tracking per resi (8 paralel) ────────────────────────────────────
+    const newResiCount = targets.filter(t => !t.prevStatus).length;
 
     for (let i = 0; i < targets.length; i += CONCURRENCY) {
       const batch = targets.slice(i, i + CONCURRENCY);
-      await Promise.all(batch.map(async resi => {
+      await Promise.all(batch.map(async target => {
         try {
           checked++;
-          const order = byResi[resi];
-          const result = await checkOneResi(resi, order.ekspedisi);
+          // withTimeout 7s: 1 resi lambat tidak block seluruh batch
+          const result = await withTimeout(checkOneResi(target.resi, target.ekspedisi), API_TIMEOUT_MS);
           if (!result) return;
+
           await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?on_conflict=resi`, {
             method: 'POST',
             headers: { ...sbHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
             body: JSON.stringify({
-              resi,
-              ekspedisi: order.ekspedisi,
+              resi: target.resi,
+              ekspedisi: target.ekspedisi,
               status_resi: result.stage,
               status_resi_step: result.step,
               status_resi_updated_at: new Date().toISOString(),
@@ -318,13 +388,13 @@ module.exports = async function handler(req, res) {
           });
           updated++;
 
-          // Notif WA cuma pas BARU masuk status Bermasalah/Retur (bukan tiap re-check status yang sama)
+          // Notif WA hanya saat BARU masuk status Bermasalah/Retur (bukan tiap re-check)
           const isProblem = result.stage === 'BERMASALAH' || result.stage === 'RETUR';
-          if (isProblem && result.stage !== prevStatusMap[resi]) {
+          if (isProblem && result.stage !== target.prevStatus) {
             try {
-              const sent = await notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, result.stage);
+              const sent = await notifyCsProblem(sbHeaders, SUPABASE_URL, target, target.resi, result.stage);
               if (sent) notified++;
-            } catch (e) { /* notif gagal, tracking tetap kesimpan */ }
+            } catch (e) { /* notif gagal, tracking tetap tersimpan */ }
           }
         } catch (e) {
           errors++;
@@ -332,7 +402,7 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    res.status(200).json({ checked, updated, errors, notified, rows_this_run: targets.length });
+    res.status(200).json({ checked, updated, errors, notified, new_resi: newResiCount, total: targets.length });
   } catch (e) {
     res.status(500).json({ error: e.message, checked, updated, errors, notified });
   }
