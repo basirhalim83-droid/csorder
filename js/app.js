@@ -201,6 +201,7 @@ function drpNav(dir) {
   await loadDashboard();
   await loadHistoryMini();
   checkAndShowLockBanner();
+  loadWaTemplate(); // fire and forget — template WA bermasalah
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -2229,6 +2230,48 @@ async function checkResiTracking(resi, ekspedisi) {
   }
 }
 
+// ── WA TEMPLATE ──────────────────────────────────────────────────────────────
+let waTemplate = null;
+const WA_TEMPLATE_DEFAULT = `Halo {nama} 👋\n\nPaket kamu sedang mengalami kendala pengiriman nih.\n\n📦 Resi: {resi} ({ekspedisi})\n⚠️ Kendala: {masalah}\n\nBisa tolong konfirmasi alamat / ketersediaan kamu biar kurir bisa kirim ulang?\n\nTerima kasih 🙏`;
+
+async function loadWaTemplate() {
+  try {
+    const { data } = await sbSS.from('wa_template').select('template_text').eq('key','bermasalah').single();
+    if (data?.template_text) waTemplate = data.template_text;
+  } catch(e) { /* pakai default */ }
+}
+
+function extractMasalah(row) {
+  const detail = row.status_resi_detail;
+  if (!detail) return 'Kendala pengiriman';
+  const history = Array.isArray(detail.history) ? [...detail.history].reverse() : [];
+  const PROBLEM = /gagal|kendala|bermasalah|tidak ditemukan|alamat tidak|tidak ada orang|tidak ditempat|tidak dihuni|menunggu konfirmasi|disimpan di gudang|ditolak|pindah alamat/i;
+  for (const h of history) {
+    const desc = (h.desc || h.content || '').trim();
+    if (!desc) continue;
+    const group = (h.type && h.type.group) || '';
+    const tag   = (h.type && h.type.tag)   || '';
+    if (group === 'UNDELIVERED' || tag === 'actionRequired' || PROBLEM.test(desc)) return desc;
+  }
+  const latest = history[0];
+  return (latest && (latest.desc || latest.content || '').trim()) || 'Kendala pengiriman';
+}
+
+function trBuildWaUrl(row) {
+  const tpl = waTemplate || WA_TEMPLATE_DEFAULT;
+  const eks  = extractEkspedisi(row.pembayaran) || row.pembayaran || '';
+  const msg  = tpl
+    .replace(/{nama}/g,      row.nama   || '')
+    .replace(/{resi}/g,      row.resi   || '')
+    .replace(/{ekspedisi}/g, eks)
+    .replace(/{masalah}/g,   extractMasalah(row))
+    .replace(/{produk}/g,    row.jumlah || '');
+  let hp = (row.hp || '').replace(/\D/g, '');
+  if (hp.startsWith('0'))        hp = '62' + hp.slice(1);
+  else if (!hp.startsWith('62')) hp = '62' + hp;
+  return `https://wa.me/${hp}?text=${encodeURIComponent(msg)}`;
+}
+
 // ── TRACKING DATE RANGE PICKER ───────────────────────────────────────────────
 let trkDrpSelStart = null, trkDrpSelEnd = null, trkDrpPickingEnd = false;
 let trkDrpViewYear = new Date().getFullYear(), trkDrpViewMonth = new Date().getMonth();
@@ -2623,6 +2666,10 @@ function renderTrkCards(list) {
     const resiPart = r.resi
       ? `<span class="trk-resi-link" style="font-size:11px">${r.resi} ↗</span>`
       : '<span style="color:var(--muted);font-size:11px">Belum ada resi</span>';
+    const isBermasalah = trEffectiveStage(r) === 'BERMASALAH';
+    const waBtnHtml = (isBermasalah && r.hp)
+      ? `<a href="${trBuildWaUrl(r)}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;background:#25D366;color:#fff;font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;text-decoration:none;white-space:nowrap">💬 WA Customer</a>`
+      : '';
     return `<div class="order-card ${cardCls}"${r.resi ? ` onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" style="cursor:pointer"` : ''}>
       <div class="oc-header">
         <span class="oc-nama">${r.nama || '—'}</span>
@@ -2637,7 +2684,7 @@ function renderTrkCards(list) {
       ${trStepperHtml(r)}
       <div class="oc-footer">
         <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
-        ${trBadgeHtml(r)}
+        <div style="display:flex;gap:6px;align-items:center">${waBtnHtml}${trBadgeHtml(r)}</div>
       </div>
     </div>`;
   }).join('');
@@ -2671,11 +2718,19 @@ function trOpenDetail(resi) {
       </div>`).join('')}</div>`;
   }
 
+  const isBermasalah = trEffectiveStage(row) === 'BERMASALAH';
   document.getElementById('tr-modal-body').innerHTML = `
     <div style="margin-top:10px">${trBadgeHtml(row)}</div>
     ${trStepperHtml(row)}
     ${historyHtml}
   `;
+  const actionsEl = document.getElementById('tr-modal-actions');
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      ${(isBermasalah && row.hp) ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none">💬 WA Customer</a>` : ''}
+      <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
+    `;
+  }
   document.getElementById('tr-modal').style.display = 'flex';
 }
 
