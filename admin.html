@@ -72,6 +72,15 @@
       Tracking Order
     </div>
 
+    <div class="nav-item" id="nav-template" onclick="switchPage('template')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </span>
+      Template WA
+    </div>
+
     <div class="nav-item" id="nav-wilayahbaru" onclick="switchPage('wilayahbaru')" style="display:flex;align-items:center;justify-content:space-between">
       <span style="display:flex;align-items:center;gap:8px">
         <span class="nav-icon">
@@ -472,6 +481,34 @@
     </div>
   </div>
 
+  <!-- ══ PAGE: TEMPLATE WA ══ -->
+  <div id="page-template" class="page">
+    <div class="page-title">Template WA</div>
+    <div class="page-sub">Pesan otomatis saat CS follow up order bermasalah ke customer</div>
+
+    <div class="table-wrap" style="max-width:680px">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Template Bermasalah</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.7">
+          Variabel yang bisa dipakai:
+          <code style="background:var(--border);padding:1px 5px;border-radius:4px">{nama}</code>
+          <code style="background:var(--border);padding:1px 5px;border-radius:4px">{resi}</code>
+          <code style="background:var(--border);padding:1px 5px;border-radius:4px">{ekspedisi}</code>
+          <code style="background:var(--border);padding:1px 5px;border-radius:4px">{masalah}</code>
+          <code style="background:var(--border);padding:1px 5px;border-radius:4px">{produk}</code>
+        </div>
+      </div>
+      <div style="padding:16px 18px">
+        <textarea id="tpl-textarea" rows="10" style="width:100%;font-family:var(--mono,monospace);font-size:13px;line-height:1.6;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box" placeholder="Ketik template..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="saveTemplate()">💾 Simpan</button>
+          <button class="btn-secondary" onclick="resetTemplate()">↺ Reset Default</button>
+        </div>
+        <div id="tpl-status" style="font-size:12px;margin-top:8px;color:var(--muted)"></div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main-area -->
 
 <div id="toast-wrap" class="toast-wrap"></div>
@@ -530,22 +567,113 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 
   await loadOverview();
   await refreshWilayahBaruBadge();
+  loadWaTemplate(); // fire and forget
 })();
+
+// ── WA TEMPLATE ──────────────────────────────────────────────────────────────
+let waTemplate = null;
+const WA_TEMPLATE_DEFAULT = `Halo {nama} 👋\n\nPaket kamu sedang mengalami kendala pengiriman nih.\n\n📦 Resi: {resi} ({ekspedisi})\n⚠️ Kendala: {masalah}\n\nBisa tolong konfirmasi alamat / ketersediaan kamu biar kurir bisa kirim ulang?\n\nTerima kasih 🙏`;
+
+async function loadWaTemplate() {
+  try {
+    const { data } = await sbSS.from('wa_template').select('template_text').eq('key','bermasalah').single();
+    if (data?.template_text) waTemplate = data.template_text;
+  } catch(e) { /* pakai default */ }
+}
+
+function extractMasalah(row) {
+  const detail = row.status_resi_detail;
+  if (!detail) return 'Kendala pengiriman';
+  const history = Array.isArray(detail.history) ? [...detail.history].reverse() : [];
+  const PROBLEM = /gagal|kendala|bermasalah|tidak ditemukan|alamat tidak|tidak ada orang|tidak ditempat|tidak dihuni|menunggu konfirmasi|disimpan di gudang|ditolak|pindah alamat/i;
+  for (const h of history) {
+    const desc = (h.desc || h.content || '').trim();
+    if (!desc) continue;
+    const group = (h.type && h.type.group) || '';
+    const tag   = (h.type && h.type.tag)   || '';
+    if (group === 'UNDELIVERED' || tag === 'actionRequired' || PROBLEM.test(desc)) return desc;
+  }
+  const latest = history[0];
+  return (latest && (latest.desc || latest.content || '').trim()) || 'Kendala pengiriman';
+}
+
+function trBuildWaUrl(row) {
+  const tpl = waTemplate || WA_TEMPLATE_DEFAULT;
+  const eks  = extractEkspedisi(row.pembayaran) || row.pembayaran || '';
+  const msg  = tpl
+    .replace(/{nama}/g,      row.nama   || '')
+    .replace(/{resi}/g,      row.resi   || '')
+    .replace(/{ekspedisi}/g, eks)
+    .replace(/{masalah}/g,   extractMasalah(row))
+    .replace(/{produk}/g,    row.jumlah || '');
+  let hp = (row.hp || '').replace(/\D/g, '');
+  if (hp.startsWith('0'))        hp = '62' + hp.slice(1);
+  else if (!hp.startsWith('62')) hp = '62' + hp;
+  return `https://wa.me/${hp}?text=${encodeURIComponent(msg)}`;
+}
+
+async function loadTemplate() {
+  const ta = document.getElementById('tpl-textarea');
+  const st = document.getElementById('tpl-status');
+  if (!ta) return;
+  st.textContent = 'Memuat...';
+  try {
+    const { data } = await sbSS.from('wa_template').select('template_text,updated_at').eq('key','bermasalah').single();
+    if (data?.template_text) {
+      ta.value = data.template_text;
+      const upd = data.updated_at ? new Date(data.updated_at).toLocaleString('id-ID') : '';
+      st.textContent = upd ? `Terakhir diperbarui: ${upd}` : '';
+    } else {
+      ta.value = WA_TEMPLATE_DEFAULT;
+      st.textContent = 'Menggunakan template default.';
+    }
+  } catch(e) {
+    ta.value = WA_TEMPLATE_DEFAULT;
+    st.textContent = 'Gagal load — menggunakan default.';
+  }
+}
+
+async function saveTemplate() {
+  const ta   = document.getElementById('tpl-textarea');
+  const st   = document.getElementById('tpl-status');
+  const text = ta?.value?.trim();
+  if (!text) { showToast('Template tidak boleh kosong.', 'error'); return; }
+  st.textContent = 'Menyimpan...';
+  try {
+    const { error } = await sbSS.from('wa_template').upsert(
+      { key: 'bermasalah', template_text: text, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    );
+    if (error) throw error;
+    waTemplate = text; // update cache
+    showToast('Template berhasil disimpan!', 'success');
+    st.textContent = `Terakhir diperbarui: ${new Date().toLocaleString('id-ID')}`;
+  } catch(e) {
+    showToast('Gagal simpan: ' + e.message, 'error');
+    st.textContent = '';
+  }
+}
+
+function resetTemplate() {
+  const ta = document.getElementById('tpl-textarea');
+  if (ta) ta.value = WA_TEMPLATE_DEFAULT;
+}
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','users','fonnte','sku','tracking','wilayahbaru'].forEach(p => {
+  ['overview','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru' };
+  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
   if (name === 'sku')         loadSku();
   if (name === 'tracking')    loadTracking();
   if (name === 'wilayahbaru') loadWilayahBaru();
+  if (name === 'template')    loadTemplate();
 }
 
 // ══ WILAYAH BARU ═════════════════════════════════════════════════════════════
@@ -1562,6 +1690,10 @@ function renderTrkCards(list) {
     const resiPart = r.resi
       ? `<span class="trk-resi-link" style="font-size:11px">${r.resi} ↗</span>`
       : '<span style="color:var(--muted);font-size:11px">Belum ada resi</span>';
+    const isBermasalah = trEffectiveStage(r) === 'BERMASALAH';
+    const waBtnHtml = (isBermasalah && r.hp)
+      ? `<a href="${trBuildWaUrl(r)}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;background:#25D366;color:#fff;font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;text-decoration:none;white-space:nowrap">💬 WA Customer</a>`
+      : '';
     return `<div class="order-card ${cardCls}"${r.resi ? ` onclick="trOpenDetail('${r.resi.replace(/'/g,"\\'")}')" style="cursor:pointer"` : ''}>
       <div class="oc-header">
         <span class="oc-nama">${r.nama || '—'}</span>
@@ -1577,7 +1709,7 @@ function renderTrkCards(list) {
       ${trStepperHtml(r)}
       <div class="oc-footer">
         <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
-        ${trBadgeHtml(r)}
+        <div style="display:flex;gap:6px;align-items:center">${waBtnHtml}${trBadgeHtml(r)}</div>
       </div>
     </div>`;
   }).join('');
@@ -1605,11 +1737,19 @@ function trOpenDetail(resi) {
         </div>
       </div>`).join('')}</div>`;
   }
+  const isBermasalah = trEffectiveStage(row) === 'BERMASALAH';
   document.getElementById('tr-modal-body').innerHTML = `
     <div style="margin-top:10px">${trBadgeHtml(row)}</div>
     ${trStepperHtml(row)}
     ${historyHtml}
   `;
+  const actionsEl = document.getElementById('tr-modal-actions');
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      ${(isBermasalah && row.hp) ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none">💬 WA Customer</a>` : ''}
+      <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
+    `;
+  }
   document.getElementById('tr-modal').style.display = 'flex';
 }
 function trCloseModal() {
