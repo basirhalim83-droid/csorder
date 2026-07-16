@@ -9,7 +9,7 @@ const COURIER_MAP = {
 // Sama daftar dengan EKSPEDISI_LIST di js/app.js — disinkron manual (tidak ada build step)
 const EKSPEDISI_LIST = [
   { key: 'JNE',      pattern: /\bJNE\b/i },
-  { key: 'JNT',      pattern: /\bJ[&\+]?T\b|JALUR\s*NUGRAHA/i },
+  { key: 'JNT',      pattern: /\bJNT\b|\bJ[&\+]?T\b|JALUR\s*NUGRAHA/i },
   { key: 'SICEPAT',  pattern: /\bSICEPAT\b|\bSICE\b/i },
   { key: 'ANTERAJA', pattern: /\bANTERAJA\b|\bANTER\b/i },
   { key: 'NINJA',    pattern: /\bNINJA\b/i },
