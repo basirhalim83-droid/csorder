@@ -41,15 +41,9 @@
 
     <!-- REGISTER -->
     <div class="auth-form" id="form-register">
-      <div class="field-row">
-        <div class="field">
-          <label>Nama CS</label>
-          <input type="text" id="r-nama" placeholder="Contoh: CS Anny" />
-        </div>
-        <div class="field">
-          <label>Nama Lengkap</label>
-          <input type="text" id="r-nama-lengkap" placeholder="Nama asli kamu" />
-        </div>
+      <div class="field">
+        <label>Nama CS</label>
+        <input type="text" id="r-nama" placeholder="Nama CS kamu" />
       </div>
       <div class="field-row">
         <div class="field">
@@ -116,15 +110,14 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const nama        = document.getElementById('r-nama').value.trim();
-  const namaLengkap = document.getElementById('r-nama-lengkap').value.trim();
-  const wa          = document.getElementById('r-wa').value.trim();
-  const email       = document.getElementById('r-email').value.trim();
-  const pass        = document.getElementById('r-pass').value;
-  const pass2       = document.getElementById('r-pass2').value;
-  const errEl       = document.getElementById('register-err');
-  const okEl        = document.getElementById('register-ok');
-  const btn         = document.getElementById('btn-register');
+  const nama  = document.getElementById('r-nama').value.trim();
+  const wa    = document.getElementById('r-wa').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  const pass  = document.getElementById('r-pass').value;
+  const pass2 = document.getElementById('r-pass2').value;
+  const errEl = document.getElementById('register-err');
+  const okEl  = document.getElementById('register-ok');
+  const btn   = document.getElementById('btn-register');
 
   errEl.style.display = 'none';
   okEl.style.display  = 'none';
@@ -137,7 +130,7 @@ async function doRegister() {
   btn.textContent = 'Mendaftar...';
 
   try {
-    await signUp(email, pass, nama, wa, namaLengkap);
+    await signUp(email, pass, nama, wa);
     okEl.textContent  = '✓ Pendaftaran berhasil! Silakan masuk.';
     okEl.style.display = 'block';
     btn.textContent = 'Daftar Sekarang';
