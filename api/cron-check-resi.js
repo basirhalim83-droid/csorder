@@ -212,7 +212,15 @@ function hpVariants(raw) {
   return [...new Set(['0' + noZero, noZero, '62' + noZero])];
 }
 
-// Notif WA ke CS pemilik order pas resi-nya baru masuk status Bermasalah/Retur (bukan tiap cron jalan)
+// Cek apakah last_notif_at sudah hari ini (WIB) — untuk anti-spam 1x/hari
+function isNotifiedToday(isoStr) {
+  if (!isoStr) return false;
+  const today     = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const notifDate = new Date(isoStr).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  return today === notifDate;
+}
+
+// Notif WA ke CS pemilik order tiap hari selama masih BERMASALAH (max 1x/hari per resi)
 async function notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, stage) {
   const hpVar = hpVariants(order.hp);
   if (!hpVar.length) return false;
@@ -245,7 +253,7 @@ async function notifyCsProblem(sbHeaders, SUPABASE_URL, order, resi, stage) {
     `📦 Resi : ${resi}\n\n` +
     `Mohon segera cek & follow up ke customer ya.\nTerima Kasih 🙏`;
 
-  await sendFonnteWA(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, profile.no_wa, msg);
+  await sendFonnteWA(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, profile.no_wa, msg, 'notif-bermasalah');
   return true;
 }
 
@@ -320,7 +328,7 @@ module.exports = async function handler(req, res) {
     // Query dari cs_order_tracking: tidak SAMPAI/RETUR, urut updated_at ASC
     // (yang paling lama dicek = paling atas antrian).
     const rotFilter = new URLSearchParams({
-      select: 'resi,ekspedisi,status_resi',
+      select: 'resi,ekspedisi,status_resi,last_notif_at',
       status_resi: 'not.in.(SAMPAI,RETUR)',
       order: 'status_resi_updated_at.asc.nullsfirst',
       limit: String(ROT_SLOTS + 20) // ambil lebih, biar ada buffer setelah dedup
@@ -354,7 +362,8 @@ module.exports = async function handler(req, res) {
         resi: row.resi,
         ekspedisi: row.ekspedisi || extractEkspedisi(info.pembayaran || ''),
         hp: info.hp, tanggal: info.tanggal, nama: info.nama,
-        prevStatus: row.status_resi
+        prevStatus: row.status_resi,
+        last_notif_at: row.last_notif_at || null
       });
     }
 
@@ -388,12 +397,23 @@ module.exports = async function handler(req, res) {
           });
           updated++;
 
-          // Notif WA hanya saat BARU masuk status Bermasalah/Retur (bukan tiap re-check)
-          const isProblem = result.stage === 'BERMASALAH' || result.stage === 'RETUR';
-          if (isProblem && result.stage !== target.prevStatus) {
+          // Notif WA ke CS tiap hari selama masih BERMASALAH (max 1x/hari per resi)
+          // RETUR tidak kirim notif harian — cukup sekali saat pertama kali berubah ke RETUR
+          const isProblem = result.stage === 'BERMASALAH';
+          const isNewRetur = result.stage === 'RETUR' && result.stage !== target.prevStatus;
+          const shouldNotif = isProblem && !isNotifiedToday(target.last_notif_at);
+          if (shouldNotif || isNewRetur) {
             try {
               const sent = await notifyCsProblem(sbHeaders, SUPABASE_URL, target, target.resi, result.stage);
-              if (sent) notified++;
+              if (sent) {
+                notified++;
+                // Update last_notif_at supaya tidak spam hari yang sama
+                await fetch(`${SUPABASE_URL}/rest/v1/cs_order_tracking?resi=eq.${encodeURIComponent(target.resi)}`, {
+                  method: 'PATCH',
+                  headers: { ...sbHeaders, Prefer: 'return=minimal' },
+                  body: JSON.stringify({ last_notif_at: new Date().toISOString() })
+                });
+              }
             } catch (e) { /* notif gagal, tracking tetap tersimpan */ }
           }
         } catch (e) {
