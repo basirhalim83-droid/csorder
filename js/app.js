@@ -2415,8 +2415,7 @@ function renderTrkTabs() {
 async function trFetchTrackingRows(masukList, range) {
   if (!masukList.length) return [];
 
-  // 1. Kumpulkan pasangan HP+tanggal dari orderan_masuk (key = HP dinormalisasi, biar konsisten
-  //    apapun format aslinya di orderan_masuk)
+  // 1. Kumpulkan HP+tanggal dari orderan_masuk, build lookup map
   const hpTanggalMap = {};
   const hpVariantSet = new Set();
   masukList.forEach(r => {
@@ -2427,29 +2426,38 @@ async function trFetchTrackingRows(masukList, range) {
     hpVariants(r.hp).forEach(v => hpVariantSet.add(v));
   });
 
-  const hpList = [...hpVariantSet]; // semua varian format (08xxx/8xxx/628xxx) — jaga-jaga all_orderan kesimpen beda format
+  const hpList = [...hpVariantSet];
   if (!hpList.length) return [];
 
-  // 2. Query all_orderan: filter sumber='cs_input' + HP (+ rentang tanggal kalau dikasih)
-  //    sumber='cs_input' memastikan tidak ikut ambil orderan lama dari ValidasiOrder
-  let q = sb.from('all_orderan')
-    .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
-    .eq('sumber', 'cs_input')
-    .in('hp', hpList)
-    .limit(500);
-  if (range?.start) q = q.gte('tanggal', range.start);
-  if (range?.end)   q = q.lte('tanggal', range.end);
-  const { data: allData, error: allErr } = await q.order('tanggal', { ascending: false });
-  if (allErr) throw allErr;
+  // 2. Batch query all_orderan: split hpList per 100 item, query paralel, hindari URL terlalu panjang
+  const CHUNK = 100;
+  const chunks = [];
+  for (let i = 0; i < hpList.length; i += CHUNK) chunks.push(hpList.slice(i, i + CHUNK));
 
-  // 3. Filter tambahan: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
-  //    (hp dinormalisasi dulu sebelum lookup, karena hpTanggalMap key-nya format 08xxx)
-  const filtered = (allData || []).filter(r => {
+  const chunkResults = await Promise.all(chunks.map(chunk => {
+    let q = sb.from('all_orderan')
+      .select('no, tanggal, nama, hp, jumlah, pembayaran, resi, kabupaten, status_akhir')
+      .eq('sumber', 'cs_input')
+      .in('hp', chunk)
+      .limit(500);
+    if (range?.start) q = q.gte('tanggal', range.start);
+    if (range?.end)   q = q.lte('tanggal', range.end);
+    return q.order('tanggal', { ascending: false });
+  }));
+
+  const allData = [];
+  for (const res of chunkResults) {
+    if (res.error) throw res.error;
+    allData.push(...(res.data || []));
+  }
+
+  // 3. Filter: pastikan HP+tanggal cocok persis dengan orderan_masuk CS ini
+  const filtered = allData.filter(r => {
     const tgl = (r.tanggal || '').slice(0, 10);
     return hpTanggalMap[normalizeHP(r.hp)]?.has(tgl);
   });
 
-  // 4. Merge status tracking live dari cs_order_tracking (hasil cron/manual check), keyed by resi
+  // 4. Merge status tracking dari cs_order_tracking, keyed by resi
   const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
   let trkByResi = {};
   if (resiList.length) {
