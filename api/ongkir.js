@@ -1,7 +1,8 @@
-// Proxy Cek Ongkir — pakai Public API Mengantar (gak butuh API key asli,
-// {API_KEY} di /address/search cuma legacy path, bebas string apa aja).
-const BASE_URL  = 'https://api-public.mengantar.com';
-const ORIGIN_ID = '5fc63315f8f44b34aa4c44c4'; // Gudang: Galur, Kulon Progo, DI Yogyakarta
+// Proxy Cek Ongkir — search via api-public.mengantar.com, estimasi via app.mengantar.com
+// (allEstimatePublic tidak butuh API key, cukup User-Agent — sama seperti BotWA)
+const SEARCH_BASE = 'https://api-public.mengantar.com';
+const EST_BASE    = 'https://app.mengantar.com/api';
+const ORIGIN_ID   = '5fc63315f8f44b34aa4c44c4'; // Gudang: Galur, Kulon Progo, DI Yogyakarta
 
 // key = kode ekspedisi yang dipakai di app (EKSPEDISI_LIST js/app.js),
 // value = key kurir di response allEstimatePublic
@@ -31,7 +32,7 @@ module.exports = async function handler(req, res) {
     if (!keyword) return res.status(400).json({ error: 'keyword wajib diisi' });
     try {
       const searchR = await fetch(
-        `${BASE_URL}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
+        `${SEARCH_BASE}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
         { headers: { Accept: 'application/json' } }
       );
       const searchJson = await searchR.json();
@@ -63,7 +64,7 @@ module.exports = async function handler(req, res) {
       };
     } else {
       const searchR = await fetch(
-        `${BASE_URL}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
+        `${SEARCH_BASE}/api/public/csorder/address/search?keyword=${encodeURIComponent(keyword)}`,
         { headers: { Accept: 'application/json' } }
       );
       const searchJson = await searchR.json();
@@ -71,10 +72,10 @@ module.exports = async function handler(req, res) {
       if (!dest) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
     }
 
-    // allEstimate3PL = tarif mentah TANPA diskon/promo Mengantar (beda dari allEstimatePublic)
+    // allEstimatePublic = endpoint publik tanpa auth, sama yang dipakai BotWA
     const estR = await fetch(
-      `${BASE_URL}/api/order/allEstimate3PL?origin_id=${ORIGIN_ID}&destination_id=${dest._id}&weight=${weight}`,
-      { headers: { Accept: 'application/json' } }
+      `${EST_BASE}/order/allEstimatePublic?origin_id=${ORIGIN_ID}&destination_id=${dest._id}&weight=${weight}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
     );
     const estJson = await estR.json();
     if (!estJson?.success) return res.status(200).json({ ok: false, reason: 'Gagal ambil estimasi ongkir' });
