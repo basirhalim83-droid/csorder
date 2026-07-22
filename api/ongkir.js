@@ -101,8 +101,13 @@ module.exports = async function handler(req, res) {
       } catch (e) { /* diamkan -- skor optional */ }
     }
 
+    // Buat lookup case-insensitive dari data API
+    const dataLower = Object.fromEntries(
+      Object.entries(estJson.data || {}).map(([k, v]) => [k.toLowerCase(), v])
+    );
+
     const couriers = Object.entries(COURIER_MAP).map(([key, apiCourierKey]) => {
-      const d = estJson.data?.[apiCourierKey];
+      const d = dataLower[apiCourierKey.toLowerCase()];
       const score = scoreMap[apiCourierKey.toLowerCase()];
       const recommended = recommendedKey === apiCourierKey.toLowerCase();
       if (!d) return { key, unsupported: true, score: score ?? null, recommended };
