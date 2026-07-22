@@ -88,7 +88,7 @@ module.exports = async function handler(req, res) {
     if (apiKey) {
       try {
         const perfR = await fetch(
-          `${BASE_URL}/api/public/${apiKey}/order/getPerformancePublic`,
+          `${SEARCH_BASE}/api/public/${apiKey}/order/getPerformancePublic`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
