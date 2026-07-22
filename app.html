@@ -416,6 +416,24 @@ Keterangan: Bonus masker"></textarea>
       </div>
     </div>
 
+    <!-- Gmail -->
+    <div class="card" id="gmail-card">
+      <div class="card-title">Koneksi Gmail</div>
+      <div class="card-desc">Hubungkan Gmail CS untuk verifikasi klik iklan saat ada duplikat all team</div>
+      <div id="gmail-status-wrap" style="margin:12px 0;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <div id="gmail-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0"></div>
+        <div>
+          <div id="gmail-status-label" style="font-size:13px;font-weight:600;color:var(--text)">Memuat...</div>
+          <div id="gmail-status-email" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-save" id="gmail-connect-btn" onclick="gmailConnect()" style="display:none">Hubungkan Gmail</button>
+        <button class="btn-secondary" id="gmail-disconnect-btn" onclick="gmailDisconnect()" style="display:none;color:var(--danger);border-color:var(--danger)">Putus Koneksi</button>
+      </div>
+      <div id="gmail-action-status" style="font-size:12px;margin-top:8px;display:none;padding:6px 10px;border-radius:6px"></div>
+    </div>
+
     <!-- Info Akun -->
     <div class="card">
       <div class="card-title">Info Akun</div>
