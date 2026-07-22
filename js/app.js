@@ -1566,7 +1566,13 @@ async function doSubmit() {
     }
   });
 
-  // Cek ongkir mismatch (> 10% dari estimasi Mengantar)
+  // Cek format HP — harus angka saja
+  const hpVal = (document.getElementById('f-hp')?.value || '').trim();
+  if (hpVal && /[^\d]/.test(hpVal)) {
+    problems.push(`• <strong>No. HP</strong>: mengandung karakter selain angka — "${hpVal}"`);
+  }
+
+  // Cek ongkir mismatch (> 15% dari estimasi Mengantar)
   if (typeof ongkirMismatch === 'string') {
     problems.push(`• <strong>Ongkir</strong>: ${ongkirMismatch}`);
   }
