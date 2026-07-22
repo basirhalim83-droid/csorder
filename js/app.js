@@ -202,6 +202,24 @@ function drpNav(dir) {
   await loadHistoryMini();
   checkAndShowLockBanner();
   loadWaTemplate(); // fire and forget — template WA bermasalah
+
+  // Handle redirect balik dari Google OAuth (gmail=success/error/cancelled)
+  const qp = new URLSearchParams(window.location.search);
+  const gmailParam = qp.get('gmail');
+  if (gmailParam) {
+    history.replaceState({}, '', window.location.pathname); // bersihkan query string
+    if (gmailParam === 'success') {
+      const emailParam = qp.get('email') || '';
+      switchPage('setting');
+      showToast('Gmail berhasil dihubungkan!' + (emailParam ? ' (' + emailParam + ')' : ''), 'success');
+    } else if (gmailParam === 'error') {
+      switchPage('setting');
+      showToast('Gagal menghubungkan Gmail. Coba lagi.', 'error');
+    } else if (gmailParam === 'cancelled') {
+      switchPage('setting');
+      showToast('Koneksi Gmail dibatalkan.', 'info');
+    }
+  }
 })();
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -246,6 +264,10 @@ function buildValBadges(r) {
   const badges = [];
   if (r.is_dup_today)     badges.push('<span class="badge badge-dup">DUP HARI INI</span>');
   if (r.is_dup_all)       badges.push('<span class="badge badge-dup">DUP ALL</span>');
+  if (r.is_dup_all && r.iklan_verified === false)
+    badges.push('<span class="badge" style="background:var(--danger-light,#fee2e2);color:var(--danger,#dc2626);font-size:10px">⛔ Tidak ada klik iklan dalam 7 hari</span>');
+  if (r.is_dup_all && r.iklan_verified === true)
+    badges.push('<span class="badge" style="background:var(--success-light,#dcfce7);color:var(--success,#16a34a);font-size:10px">✅ Klik iklan terverifikasi</span>');
   if (r.is_rts)           badges.push('<span class="badge badge-rts">PERNAH RTS</span>');
   if (r.is_wajib_transfer)badges.push('<span class="badge badge-rts">WAJIB TRANSFER</span>');
   if (r.is_wilayah_rawan) badges.push('<span class="badge badge-warn">RAWAN</span>');
@@ -1727,6 +1749,19 @@ async function doSubmitExec() {
     const rtsCount        = returMatches.length;
     const isWajibTransfer = isRTSFinal && rtsCount >= 2;
 
+    // 3a. Cek iklan_verified — apakah HP ini ada di gmail_leads CS ini dalam 7 hari terakhir
+    let iklanVerified = null; // null = tidak perlu dicek (bukan dup_all)
+    if (isDupAll) {
+      const cutoff7 = new Date(Date.now() - 7 * 864e5).toISOString();
+      const { data: leadRows } = await sb.from('gmail_leads')
+        .select('id')
+        .eq('hp', normalizeHP(form.hp))
+        .eq('cs_id', currentUser.id)
+        .gte('email_date', cutoff7)
+        .limit(1);
+      iklanVerified = !!(leadRows && leadRows.length > 0);
+    }
+
     // 3. Update row dengan hasil validasi
     const valUpdate = {
       is_dup_today      : isDupToday,
@@ -1740,6 +1775,7 @@ async function doSubmitExec() {
       kp_stat           : kpStat           ? { total: kpStat.total, retur: kpStat.retur, pct: kpStat.pct } : null,
       eks_detail        : rekEkspedisi     ? { dipakai: usedEks, rekomendasi: rekEkspedisi, status: eksColor } : null,
       receiver_score    : lastReceiverScore || null,
+      iklan_verified    : iklanVerified,
     };
 
     await sb.from('orderan_masuk').update(valUpdate).eq('id', insertedId);
@@ -1925,6 +1961,69 @@ async function loadSetting() {
     .eq('cs_id', currentUser.id)
     .eq('tanggal', getOrderDate());
   document.getElementById('info-today').textContent = (count||0) + ' order';
+
+  await loadGmailStatus();
+}
+
+// ── GMAIL SETTING ─────────────────────────────────────────────────────────────
+async function loadGmailStatus() {
+  if (!currentUser) return;
+  try {
+    const res  = await fetch(`/api/gmail-cs?action=status&cs_id=${currentUser.id}`);
+    const data = await res.json();
+    const dot   = document.getElementById('gmail-status-dot');
+    const label = document.getElementById('gmail-status-label');
+    const email = document.getElementById('gmail-status-email');
+    const btnConn = document.getElementById('gmail-connect-btn');
+    const btnDisc = document.getElementById('gmail-disconnect-btn');
+    if (data.connected) {
+      dot.style.background   = 'var(--success)';
+      label.textContent      = 'Terhubung';
+      label.style.color      = 'var(--success)';
+      email.textContent      = data.gmail_email || '';
+      btnConn.style.display  = 'none';
+      btnDisc.style.display  = 'inline-block';
+    } else {
+      dot.style.background   = 'var(--muted)';
+      label.textContent      = 'Belum terhubung';
+      label.style.color      = 'var(--muted)';
+      email.textContent      = '';
+      btnConn.style.display  = 'inline-block';
+      btnDisc.style.display  = 'none';
+    }
+  } catch(e) {
+    document.getElementById('gmail-status-label').textContent = 'Gagal memuat status';
+  }
+}
+
+async function gmailConnect() {
+  const btn = document.getElementById('gmail-connect-btn');
+  btn.disabled = true;
+  btn.textContent = 'Menghubungkan...';
+  try {
+    const res  = await fetch(`/api/gmail-cs?action=url&cs_id=${currentUser.id}`);
+    const data = await res.json();
+    if (data.url) window.location.href = data.url;
+    else throw new Error(data.error || 'Gagal ambil URL');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Hubungkan Gmail';
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+async function gmailDisconnect() {
+  const btn = document.getElementById('gmail-disconnect-btn');
+  btn.disabled = true;
+  try {
+    await fetch(`/api/gmail-cs?action=disconnect&cs_id=${currentUser.id}`);
+    showToast('Gmail berhasil diputus.', 'success');
+    await loadGmailStatus();
+  } catch(e) {
+    showToast('Gagal: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function saveProfil() {
