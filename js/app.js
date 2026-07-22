@@ -1184,11 +1184,26 @@ async function validateOngkirTarif() {
   try {
     const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(kec + ' ' + kab)}&weight=1`);
     json = await r.json();
-  } catch (e) { return; } // gagal ambil data -> diamkan, gak ganggu submit
-  if (!json?.ok) return;
+  } catch (e) {
+    console.warn('[ongkir] fetch error:', e.message);
+    hint.classList.add('warn');
+    hint.textContent = `⚠ [debug] Gagal koneksi ke /api/ongkir`;
+    return;
+  }
+  if (!json?.ok) {
+    console.warn('[ongkir] api not ok:', json);
+    hint.classList.add('warn');
+    hint.textContent = `⚠ [debug] API error: ${json?.reason || JSON.stringify(json)}`;
+    return;
+  }
 
   const match = json.couriers.find(c => c.key === eksp);
-  if (!match || match.unsupported || !match.price) return;
+  if (!match || match.unsupported || !match.price) {
+    console.warn('[ongkir] no match for eksp:', eksp, 'couriers:', json.couriers.map(c => c.key));
+    hint.classList.add('warn');
+    hint.textContent = `⚠ [debug] Kurir "${eksp}" tidak ada di estimasi. Tersedia: ${json.couriers.filter(c=>!c.unsupported).map(c=>c.key).join(', ')}`;
+    return;
+  }
 
   const fmt = n => n.toLocaleString('id-ID');
   const pct = Math.abs(ongkir - match.price) / match.price * 100;
