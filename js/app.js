@@ -625,7 +625,10 @@ function parseOrderRegex(text) {
       result.nama = l.replace(/^Nama\s*:\s*/i, '').trim();
 
     } else if (/^No\.?\s*HP\s*:/i.test(l)) {
-      result.hp = l.replace(/^No\.?\s*HP\s*:\s*/i, '').trim();
+      const rawHp = l.replace(/^No\.?\s*HP\s*:\s*/i, '').trim();
+      // Ambil hanya nomor HP di awal — abaikan teks alamat yang kadang tercampur di baris sama
+      const hpMatch = rawHp.match(/(\+?62|0)[0-9]{7,13}/);
+      result.hp = hpMatch ? hpMatch[0] : rawHp;
 
     } else if (/^Alamat\s*:/i.test(l)) {
       const val   = l.replace(/^Alamat\s*:\s*/i, '').trim();
@@ -753,7 +756,10 @@ function fillPreviewForm(d) {
     'instruksi_pengiriman','rincian_pembayaran','keterangan','keluhan'];
   fields.forEach((f, i) => {
     const el = document.getElementById('f-'+f);
-    if (el) el.value = d[keys[i]] || '';
+    if (!el) return;
+    let v = d[keys[i]] || '';
+    if (f === 'hp') v = v.replace(/[^\d+]/g, ''); // HP: angka saja, buang teks apapun
+    el.value = v;
   });
 }
 
