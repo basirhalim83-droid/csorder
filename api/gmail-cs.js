@@ -71,7 +71,7 @@ async function getAccessToken(refreshToken) {
 
 // ── Gmail API helpers ─────────────────────────────────────
 async function searchEmails(accessToken) {
-  const q = encodeURIComponent('from:support@orderonline.id is:unread');
+  const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) is:unread');
   const r = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=20`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -111,7 +111,7 @@ function extractBody(payload) {
 }
 
 // ── Parse email orderonline.id → ambil HP + nama + produk ─
-function parseOrderEmail(body) {
+function parseOrderonlineEmail(body) {
   const namaMatch = body.match(/Nama[^:]*:\s*<\/?(b|strong|td)[^>]*>\s*([^<\n]+)/i)
                  || body.match(/Nama[^:]*:\s*([^\n<]+)/i);
   const hpMatch   = body.match(/No\.?\s*Telepon[^:]*:\s*<\/?(b|strong|td)[^>]*>\s*([+\d\s]+)/i)
@@ -123,6 +123,23 @@ function parseOrderEmail(body) {
     hp:     (hpMatch?.[hpMatch.length - 1]       || '').replace(/[\s\-]/g, '').trim(),
     produk: (produkMatch?.[1]                    || '').trim(),
   };
+}
+
+// ── Parse email loops.id → "• Nama: X", "• No HP: X", "• Produk: X" ─
+function parseLoopsEmail(body) {
+  const namaMatch  = body.match(/Nama\s*:\s*([^\n<•]+)/i);
+  const hpMatch    = body.match(/No\s*HP\s*:\s*([\d+][\d\s\-]{7,})/i);
+  const produkMatch= body.match(/Produk\s*:\s*([^\n<•]+)/i);
+  return {
+    nama:   (namaMatch?.[1]  || '').trim(),
+    hp:     (hpMatch?.[1]    || '').replace(/[\s\-]/g, '').trim(),
+    produk: (produkMatch?.[1]|| '').trim(),
+  };
+}
+
+function parseOrderEmail(body, fromHeader) {
+  if (fromHeader && fromHeader.includes('loops.id')) return parseLoopsEmail(body);
+  return parseOrderonlineEmail(body);
 }
 
 // Normalisasi HP → format 08xxx
@@ -265,7 +282,8 @@ module.exports = async function handler(req, res) {
             const emailBody = extractBody(email.payload);
             if (!emailBody) { await markAsRead(token, msg.id); continue; }
 
-            const orderData = parseOrderEmail(emailBody);
+            const fromHeader = email.payload?.headers?.find(h => h.name === 'From')?.value || '';
+            const orderData = parseOrderEmail(emailBody, fromHeader);
             if (!orderData.hp) { await markAsRead(token, msg.id); continue; }
 
             const hp       = normalizeHP(orderData.hp);
