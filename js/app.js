@@ -1219,16 +1219,24 @@ async function validateOngkirTarif() {
   if (!match || match.unsupported || !match.price) return;
 
   const fmt = n => n.toLocaleString('id-ID');
-  const pct = Math.abs(ongkir - match.price) / match.price * 100;
+  const diff = match.price - ongkir; // positif = CS input lebih kecil dari estimasi
+  const pct  = diff / match.price * 100;
 
-  if (pct > 15) {
-    const msg = `Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+  if (ongkir >= match.price) {
+    // CS input lebih besar atau sama — aman, tidak perlu warning
+    ongkirMismatch = false;
+    hint.classList.add('ok');
+    hint.textContent = `✓ Ongkir sesuai estimasi (Rp${fmt(match.price)})`;
+  } else if (pct > 15) {
+    // CS input lebih kecil >15% dari estimasi — hard block
+    const msg = `Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (kurang ${pct.toFixed(0)}%)`;
     ongkirMismatch = msg;
     hint.classList.add('err');
     hint.textContent = `⚠ ${msg}`;
   } else if (pct > 5) {
+    // CS input lebih kecil 5-15% — soft warning saja
     hint.classList.add('warn');
-    hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+    hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (kurang ${pct.toFixed(0)}%)`;
     ongkirMismatch = false;
   } else {
     ongkirMismatch = false;
