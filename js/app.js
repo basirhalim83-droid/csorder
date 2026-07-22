@@ -264,10 +264,12 @@ function buildValBadges(r) {
   const badges = [];
   if (r.is_dup_today)     badges.push('<span class="badge badge-dup">DUP HARI INI</span>');
   if (r.is_dup_all)       badges.push('<span class="badge badge-dup">DUP ALL</span>');
-  if (r.is_dup_all && r.iklan_verified === false)
-    badges.push('<span class="badge" style="background:var(--danger-light,#fee2e2);color:var(--danger,#dc2626);font-size:10px">⛔ Tidak ada klik iklan dalam 7 hari</span>');
-  if (r.is_dup_all && r.iklan_verified === true)
-    badges.push('<span class="badge" style="background:var(--success-light,#dcfce7);color:var(--success,#16a34a);font-size:10px">✅ Klik iklan terverifikasi</span>');
+  if (r.is_dup_all && currentProfile?.gmail_email) {
+    if (r.iklan_verified === false)
+      badges.push('<span class="badge" style="background:var(--danger-light,#fee2e2);color:var(--danger,#dc2626);font-size:10px">⛔ Tidak ada klik iklan dalam 7 hari</span>');
+    else if (r.iklan_verified === true)
+      badges.push('<span class="badge" style="background:var(--success-light,#dcfce7);color:var(--success,#16a34a);font-size:10px">✅ Klik iklan terverifikasi</span>');
+  }
   if (r.is_rts)           badges.push('<span class="badge badge-rts">PERNAH RTS</span>');
   if (r.is_wajib_transfer)badges.push('<span class="badge badge-rts">WAJIB TRANSFER</span>');
   if (r.is_wilayah_rawan) badges.push('<span class="badge badge-warn">RAWAN</span>');
