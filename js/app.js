@@ -558,7 +558,7 @@ function renderDashTable(orders) {
       <td>${r.jumlah_pesanan||'—'}</td>
       <td>${r.pembayaran||'—'}</td>
       <td style="font-family:var(--mono)">Rp${Number(r.total_pembayaran||0).toLocaleString('id-ID')}</td>
-      <td>${valBadge}</td>
+      <td class="td-validasi">${valBadge}</td>
       <td>${gradeBadge}</td>
       <td>${accBadge}</td>
       <td style="color:var(--muted);font-size:11px" title="${r.noted||''}">${r.noted||'—'}</td>
