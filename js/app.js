@@ -696,6 +696,7 @@ async function doParse() {
   hideValBanner();
 
   try {
+    ongkirMismatch = null; // reset sebelum parse baru
     // Coba regex dulu — instant, tanpa API call
     const regexResult = parseOrderRegex(text);
 
@@ -1156,10 +1157,13 @@ function validateRincian() {
   }
 }
 
-// ── CEK ONGKIR: advisory ke tarif asli Mengantar (soft, gak nge-block submit) ──
-// Sengaja gak pakai valSetField()/class val-warn di f-rincian -- biar gak ikut
-// kena hard-block SUBMIT_CHECK_FIELDS. Ini murni saran, CS tetap boleh submit.
+// ── CEK ONGKIR: bandingkan ongkir di rincian vs estimasi Mengantar ──────────────
+// Kalau beda > 10% → masuk ongkirMismatch → muncul di popup konfirmasi submit.
+// CS masih bisa tetap submit (soft block via popup), tapi admin akan lihat warning-nya.
+let ongkirMismatch = null; // null=belum dicek/api error, false=sesuai, string=pesan mismatch
+
 async function validateOngkirTarif() {
+  ongkirMismatch = null;
   const hint = document.getElementById('hint-ongkir-check');
   if (!hint) return;
   hint.className = 'val-hint';
@@ -1180,19 +1184,26 @@ async function validateOngkirTarif() {
   try {
     const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(kec + ' ' + kab)}&weight=1`);
     json = await r.json();
-  } catch (e) { return; } // gagal ambil data -> diamkan, gak ganggu submit
+  } catch (e) { return; }
   if (!json?.ok) return;
 
-  const match = json.couriers.find(c => c.key === eksp);
+  const match = json.couriers.find(c => c.key.toUpperCase() === (eksp || '').toUpperCase());
   if (!match || match.unsupported || !match.price) return;
 
   const fmt = n => n.toLocaleString('id-ID');
   const pct = Math.abs(ongkir - match.price) / match.price * 100;
 
-  if (pct > 5) {
+  if (pct > 15) {
+    const msg = `Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+    ongkirMismatch = msg;
+    hint.classList.add('err');
+    hint.textContent = `⚠ ${msg}`;
+  } else if (pct > 5) {
     hint.classList.add('warn');
     hint.textContent = `⚠ Ongkir tercatat Rp${fmt(ongkir)}, estimasi ${eksp} ke ${kec}: Rp${fmt(match.price)} (beda ${pct.toFixed(0)}%)`;
+    ongkirMismatch = false;
   } else {
+    ongkirMismatch = false;
     hint.classList.add('ok');
     hint.textContent = `✓ Ongkir sesuai estimasi (Rp${fmt(match.price)})`;
   }
@@ -1548,6 +1559,11 @@ async function doSubmit() {
       problems.push(`• <strong>${f.label}</strong>${detail ? ': ' + detail : ' — tidak valid'}`);
     }
   });
+
+  // Cek ongkir mismatch (> 10% dari estimasi Mengantar)
+  if (typeof ongkirMismatch === 'string') {
+    problems.push(`• <strong>Ongkir</strong>: ${ongkirMismatch}`);
+  }
 
   if (problems.length > 0) {
     document.getElementById('confirm-body').innerHTML = problems.join('<br>');
