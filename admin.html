@@ -165,6 +165,17 @@
       </div>
     </div>
 
+    <!-- Gmail Poller Card -->
+    <div class="card" style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="card-title" style="margin-bottom:2px">📧 Gmail Leads — Ambil Data Sekarang</div>
+        <div id="gmail-poll-status" style="font-size:12px;color:var(--muted)">Klik tombol untuk ambil semua email order dari Gmail semua CS.</div>
+      </div>
+      <button class="btn-secondary" id="gmail-poll-btn" onclick="runGmailPoll()" style="font-size:12px;padding:8px 16px;white-space:nowrap">
+        📥 Ambil Email Sekarang
+      </button>
+    </div>
+
     <!-- Per-CS table -->
     <div class="table-wrap">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -859,6 +870,38 @@ function toggleDark() {
 async function doLogout() {
   await sb.auth.signOut();
   window.location.href = 'index.html';
+}
+
+// ══ GMAIL POLLER (manual trigger) ═════════════════════════════════════════════
+async function runGmailPoll() {
+  const btn = document.getElementById('gmail-poll-btn');
+  const statusEl = document.getElementById('gmail-poll-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Mengambil...';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Sedang menghubungi Gmail semua CS...';
+  try {
+    const res = await fetch('/api/gmail-cs', {
+      method: 'POST',
+      headers: { 'x-cron-secret': 'Sukses2023' },
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || 'Gagal');
+
+    const totalSaved = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.saved || 0), 0);
+    const processed  = d.processed || 0;
+    const skipped    = d.skipped   || 0;
+    const parts = [`✅ Selesai (${d.duration_ms}ms)`, `${processed} CS diproses`, `${totalSaved} email baru disimpan`];
+    if (skipped > 0) parts.push(`${skipped} CS diskip (cron akan lanjutkan)`);
+    statusEl.style.color = 'var(--green, #22c55e)';
+    statusEl.textContent = parts.join(' · ');
+  } catch(e) {
+    statusEl.style.color = 'var(--danger, #ef4444)';
+    statusEl.textContent = '❌ Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Ambil Email Sekarang';
+  }
 }
 
 // ══ OVERVIEW ══════════════════════════════════════════════════════════════════
