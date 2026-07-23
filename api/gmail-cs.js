@@ -73,7 +73,7 @@ async function getAccessToken(refreshToken) {
 async function searchEmails(accessToken) {
   const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) newer_than:7d');
   const r = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=20`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=10`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const d = await r.json();
@@ -247,18 +247,29 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const start   = Date.now();
-    const results = [];
+    const start      = Date.now();
+    const BUDGET_MS  = 8000;  // bail out 2s sebelum limit 10s (Hobby plan)
+    const CONCUR     = 5;     // max paralel fetch email per CS
+    const results    = [];
 
-    // Ambil semua CS yang sudah connect Gmail
+    const timeLeft = () => BUDGET_MS - (Date.now() - start);
+
+    // Ambil CS sorted by gmail_last_checked ASC (yang paling lama/belum pernah dicek duluan)
+    // Rotating queue: tiap run proses sebanyak yang muat dalam time budget
     const csProfiles = await sbGet('cs_profiles',
-      `?gmail_refresh_token=not.is.null&select=id,nama,gmail_email,gmail_refresh_token`);
+      `?gmail_refresh_token=not.is.null&select=id,nama,gmail_email,gmail_refresh_token,gmail_last_checked&order=gmail_last_checked.asc.nullsfirst`);
 
     if (!csProfiles.length) {
       return res.json({ ok: true, message: 'Tidak ada Gmail CS terhubung' });
     }
 
     for (const cs of csProfiles) {
+      // Bail out kalau waktu sudah mepet
+      if (timeLeft() < 3000) {
+        results.push({ cs_id: cs.id, cs_nama: cs.nama, skipped: true, reason: 'budget habis' });
+        continue;
+      }
+
       const log = { cs_id: cs.id, cs_nama: cs.nama, gmail: cs.gmail_email, saved: 0, errors: [] };
       try {
         const token    = await getAccessToken(cs.gmail_refresh_token);
@@ -267,30 +278,29 @@ module.exports = async function handler(req, res) {
 
         const processedThreads = new Set();
 
-        for (const msg of messages) {
+        // Proses email secara paralel (batch CONCUR sekaligus)
+        async function processMsg(msg) {
           try {
             const email    = await getEmail(token, msg.id);
             const threadId = email.threadId || msg.id;
 
-            // Skip thread duplikat
             if (processedThreads.has(threadId)) {
               await markAsRead(token, msg.id);
-              continue;
+              return;
             }
             processedThreads.add(threadId);
 
             const emailBody = extractBody(email.payload);
-            if (!emailBody) { await markAsRead(token, msg.id); continue; }
+            if (!emailBody) { await markAsRead(token, msg.id); return; }
 
             const fromHeader = email.payload?.headers?.find(h => h.name === 'From')?.value || '';
-            const orderData = parseOrderEmail(emailBody, fromHeader);
-            if (!orderData.hp) { await markAsRead(token, msg.id); continue; }
+            const orderData  = parseOrderEmail(emailBody, fromHeader);
+            if (!orderData.hp) { await markAsRead(token, msg.id); return; }
 
-            const hp       = normalizeHP(orderData.hp);
-            const sentDate = email.payload?.headers?.find(h => h.name === 'Date')?.value;
+            const hp        = normalizeHP(orderData.hp);
+            const sentDate  = email.payload?.headers?.find(h => h.name === 'Date')?.value;
             const emailDate = sentDate ? new Date(sentDate).toISOString() : new Date().toISOString();
 
-            // Simpan ke gmail_leads (ignore duplicate gmail_msg_id)
             await sbPost('gmail_leads', {
               cs_id:        cs.id,
               cs_nama:      cs.nama,
@@ -300,7 +310,6 @@ module.exports = async function handler(req, res) {
               produk:       orderData.produk || null,
               email_date:   emailDate,
             }).catch(e => {
-              // Duplicate gmail_msg_id → ignore
               if (!e.message.includes('duplicate')) throw e;
             });
 
@@ -312,6 +321,13 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        // Batch paralel dengan concurrency limit CONCUR
+        for (let i = 0; i < messages.length; i += CONCUR) {
+          if (timeLeft() < 3000) { log.partial = true; break; }
+          const batch = messages.slice(i, i + CONCUR);
+          await Promise.all(batch.map(processMsg));
+        }
+
         await sbPatch('cs_profiles', `?id=eq.${cs.id}`,
           { gmail_last_checked: new Date().toISOString() });
 
@@ -321,7 +337,9 @@ module.exports = async function handler(req, res) {
       results.push(log);
     }
 
-    return res.json({ ok: true, duration_ms: Date.now() - start, results });
+    const skipped = results.filter(r => r.skipped).length;
+    const processed = results.filter(r => !r.skipped).length;
+    return res.json({ ok: true, duration_ms: Date.now() - start, processed, skipped, results });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
