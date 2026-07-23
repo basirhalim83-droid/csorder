@@ -70,10 +70,21 @@ async function getAccessToken(refreshToken) {
 }
 
 // ── Gmail API helpers ─────────────────────────────────────
-async function searchEmails(accessToken) {
-  const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) newer_than:7d');
+async function searchEmails(accessToken, sinceDate) {
+  // sinceDate: Date object → pakai after:YYYY/MM/DD (hanya email baru)
+  // null → fallback ke newer_than:7d (CS pertama kali connect)
+  let dateFilter;
+  if (sinceDate) {
+    const y = sinceDate.getFullYear();
+    const m = String(sinceDate.getMonth() + 1).padStart(2, '0');
+    const d = String(sinceDate.getDate()).padStart(2, '0');
+    dateFilter = `after:${y}/${m}/${d}`;
+  } else {
+    dateFilter = 'newer_than:7d';
+  }
+  const q = encodeURIComponent(`(from:support@orderonline.id OR from:no-reply@loops.id) ${dateFilter}`);
   const r = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=10`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const d = await r.json();
@@ -248,8 +259,8 @@ module.exports = async function handler(req, res) {
     }
 
     const start      = Date.now();
-    const BUDGET_MS  = 8000;  // bail out 2s sebelum limit 10s (Hobby plan)
-    const CONCUR     = 5;     // max paralel fetch email per CS
+    const BUDGET_MS  = 8000; // bail out 2s sebelum limit 10s (Hobby plan)
+    const CONCUR     = 5;    // max paralel fetch email per CS
     const results    = [];
 
     const timeLeft = () => BUDGET_MS - (Date.now() - start);
@@ -273,8 +284,12 @@ module.exports = async function handler(req, res) {
       const log = { cs_id: cs.id, cs_nama: cs.nama, gmail: cs.gmail_email, saved: 0, errors: [] };
       try {
         const token    = await getAccessToken(cs.gmail_refresh_token);
-        const messages = await searchEmails(token);
+        // Kalau sudah pernah dicek, ambil hanya email sejak last check
+        // Kalau pertama kali (null), fallback ke newer_than:7d
+        const sinceDate = cs.gmail_last_checked ? new Date(cs.gmail_last_checked) : null;
+        const messages = await searchEmails(token, sinceDate);
         log.emails_found = messages.length;
+        log.since = sinceDate ? sinceDate.toISOString() : '7d';
 
         const processedThreads = new Set();
 
