@@ -82,7 +82,7 @@ async function searchEmails(accessToken, sinceDate) {
   } else {
     dateFilter = 'newer_than:7d';
   }
-  const q = encodeURIComponent(`(from:support@orderonline.id OR from:no-reply@loops.id) ${dateFilter}`);
+  const q = encodeURIComponent(`(from:support@orderonline.id OR from:no-reply@loops.id) ${dateFilter} is:read`);
   const r = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -299,18 +299,15 @@ module.exports = async function handler(req, res) {
             const email    = await getEmail(token, msg.id);
             const threadId = email.threadId || msg.id;
 
-            if (processedThreads.has(threadId)) {
-              await markAsRead(token, msg.id);
-              return;
-            }
+            if (processedThreads.has(threadId)) return;
             processedThreads.add(threadId);
 
             const emailBody = extractBody(email.payload);
-            if (!emailBody) { await markAsRead(token, msg.id); return; }
+            if (!emailBody) return;
 
             const fromHeader = email.payload?.headers?.find(h => h.name === 'From')?.value || '';
             const orderData  = parseOrderEmail(emailBody, fromHeader);
-            if (!orderData.hp) { await markAsRead(token, msg.id); return; }
+            if (!orderData.hp) return;
 
             const hp        = normalizeHP(orderData.hp);
             const sentDate  = email.payload?.headers?.find(h => h.name === 'Date')?.value;
@@ -328,11 +325,9 @@ module.exports = async function handler(req, res) {
               if (!e.message.includes('duplicate')) throw e;
             });
 
-            await markAsRead(token, msg.id);
             log.saved++;
           } catch(e) {
             log.errors.push({ msg_id: msg.id, error: e.message });
-            try { await markAsRead(token, msg.id); } catch(_) {}
           }
         }
 
