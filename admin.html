@@ -902,7 +902,15 @@ async function runGmailPoll() {
       totalProcessed += (d.processed || 0);
 
       // Log detail ke console untuk debug
-      console.log(`[Gmail] Round ${round}:`, d.results);
+      console.log(`[Gmail] Round ${round}: processed=${d.processed} skipped=${d.skipped} duration=${d.duration_ms}ms`);
+      (d.results || []).forEach(r => {
+        if (r.skipped) {
+          console.log(`  SKIP  [${r.cs_nama}]`);
+        } else {
+          const errMsg = (r.errors || []).map(e => e.error || e.retro || JSON.stringify(e)).join('; ');
+          console.log(`  OK    [${r.cs_nama}] found:${r.emails_found ?? '?'} new:${r.emails_new ?? '?'} saved:${r.saved} errors:"${errMsg}"`);
+        }
+      });
 
       statusEl.textContent = `Putaran ${round} · ditemukan: ${roundFound} · baru: ${roundNew} · tersimpan: ${roundSaved} · sisa: ${d.skipped || 0} CS`;
 
