@@ -1,4 +1,9 @@
 
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function nowWIB() {
+  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('Z', '+07:00');
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let currentUser   = null;
 let currentProfile = null;
@@ -1644,10 +1649,11 @@ async function doSubmitExec() {
     // 1. Insert ke orderan_masuk
     const insertRow = {
       ...form,
-      cs_id   : currentUser.id,
-      cs_nama : profile.nama,
-      tanggal : today,
-      raw_input: document.getElementById('paste-input').value.trim()
+      cs_id      : currentUser.id,
+      cs_nama    : profile.nama,
+      tanggal    : today,
+      raw_input  : document.getElementById('paste-input').value.trim(),
+      created_at : nowWIB()
     };
 
     const { data: inserted, error: insertErr } = await sb
