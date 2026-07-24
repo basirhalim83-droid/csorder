@@ -228,7 +228,7 @@
 
     <!-- Filter bar -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem">
-      <input type="date" id="adash-date" class="f-input" style="width:auto;min-width:150px" onchange="adashRender()" />
+      <input type="date" id="adash-date" class="f-input" style="width:auto;min-width:150px" onchange="loadAdminDash()" />
       <select id="adash-cs-filter" class="f-input" style="width:auto;min-width:160px" onchange="adashRender()">
         <option value="">Semua CS</option>
       </select>
@@ -1148,6 +1148,8 @@ async function runRevalidasiIklan() {
     }
 
     statusEl.style.color = 'var(--green,#22c55e)';
+    statusEl.textContent = `✅ Selesai! ${updated} orderan diperbarui. Memuat ulang dashboard...`;
+    await loadAdminDash();
     statusEl.textContent = `✅ Selesai! ${updated} orderan berhasil diperbarui dari "Tdk Ada Klik" → terverifikasi.`;
   } catch(e) {
     statusEl.style.color = 'var(--danger,#ef4444)';
