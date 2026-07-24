@@ -2463,7 +2463,8 @@ function adashDrpUpdateSel() {
   document.getElementById('adash-drp-sel-start').textContent = adashDrpFmt(adashDrpStart);
   document.getElementById('adash-drp-sel-end').textContent   = adashDrpFmt(adashDrpEnd);
 }
-function adashDrpClickDay(y, m, d) {
+function adashDrpClickDay(y, m, d, ev) {
+  if (ev) ev.stopPropagation();
   const clicked = new Date(y, m, d);
   if (!adashDrpStart || (adashDrpStart && adashDrpEnd)) {
     adashDrpStart = clicked; adashDrpEnd = null;
@@ -2511,7 +2512,7 @@ function adashDrpRender() {
     else if (isEnd)   cls += ' range-end';
     else if (inRange) cls += ' in-range';
     if (isToday) cls += ' today';
-    html += `<button class="${cls}" onclick="adashDrpClickDay(${y},${m},${d})">${d}</button>`;
+    html += `<button class="${cls}" onclick="adashDrpClickDay(${y},${m},${d},event)">${d}</button>`;
   }
   const total = startPad + daysInMo;
   const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
@@ -2547,18 +2548,27 @@ async function loadAdminDash() {
   });
 
   try {
-    // Fetch orderan + cs_profiles parallel
-    const [ordersRes, csRes] = await Promise.all([
-      sb.from('orderan_masuk')
-        .select('id,cs_id,cs_nama,nama,hp,jumlah_pesanan,pembayaran,total_pembayaran,acc_spv,noted,created_at,tanggal,is_dup_today,is_dup_all,is_rts,is_wilayah_rawan,is_wajib_transfer,receiver_score,iklan_verified')
-        .gte('tanggal', dateStart)
-        .lte('tanggal', dateEnd)
-        .order('created_at', { ascending: false }),
+    // Pagination loop + cs_profiles parallel
+    const PAGE = 1000;
+    const [csRes] = await Promise.all([
       sb.from('cs_profiles').select('id,nama').order('nama')
     ]);
 
-    if (ordersRes.error) throw ordersRes.error;
-    adashAllData = ordersRes.data || [];
+    let allOrders = [], from = 0;
+    while (true) {
+      const { data: batch, error } = await sb.from('orderan_masuk')
+        .select('id,cs_id,cs_nama,nama,hp,jumlah_pesanan,pembayaran,total_pembayaran,acc_spv,noted,created_at,tanggal,is_dup_today,is_dup_all,is_rts,is_wilayah_rawan,is_wajib_transfer,receiver_score,iklan_verified')
+        .gte('tanggal', dateStart)
+        .lte('tanggal', dateEnd)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      allOrders = allOrders.concat(batch || []);
+      if (!batch || batch.length < PAGE) break;
+      from += PAGE;
+    }
+
+    adashAllData = allOrders;
 
     // Build CS map & populate filter
     adashCsMap = {};
