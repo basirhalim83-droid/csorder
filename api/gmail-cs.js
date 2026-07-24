@@ -70,19 +70,9 @@ async function getAccessToken(refreshToken) {
 }
 
 // ── Gmail API helpers ─────────────────────────────────────
-async function searchEmails(accessToken, sinceDate) {
-  // sinceDate: Date object → pakai after:YYYY/MM/DD (hanya email baru)
-  // null → fallback ke newer_than:7d (CS pertama kali connect)
-  let dateFilter;
-  if (sinceDate) {
-    const y = sinceDate.getFullYear();
-    const m = String(sinceDate.getMonth() + 1).padStart(2, '0');
-    const d = String(sinceDate.getDate()).padStart(2, '0');
-    dateFilter = `after:${y}/${m}/${d}`;
-  } else {
-    dateFilter = 'newer_than:7d';
-  }
-  const q = encodeURIComponent(`(from:support@orderonline.id OR from:no-reply@loops.id) ${dateFilter} is:read`);
+async function searchEmails(accessToken) {
+  // Selalu ambil 7 hari ke belakang is:read — dedup via gmail_msg_id di DB
+  const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) newer_than:7d is:read');
   const r = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -284,12 +274,29 @@ module.exports = async function handler(req, res) {
       const log = { cs_id: cs.id, cs_nama: cs.nama, gmail: cs.gmail_email, saved: 0, errors: [] };
       try {
         const token    = await getAccessToken(cs.gmail_refresh_token);
-        // Kalau sudah pernah dicek, ambil hanya email sejak last check
-        // Kalau pertama kali (null), fallback ke newer_than:7d
-        const sinceDate = cs.gmail_last_checked ? new Date(cs.gmail_last_checked) : null;
-        const messages = await searchEmails(token, sinceDate);
-        log.emails_found = messages.length;
-        log.since = sinceDate ? sinceDate.toISOString() : '7d';
+        const allMessages = await searchEmails(token);
+        log.emails_found = allMessages.length;
+        if (!allMessages.length) {
+          await sbPatch('cs_profiles', `?id=eq.${cs.id}`, { gmail_last_checked: new Date().toISOString() });
+          results.push(log);
+          continue;
+        }
+
+        // Cek mana message ID yang sudah tersimpan di gmail_leads → skip fetch body-nya
+        const allIds = allMessages.map(m => m.id);
+        const existingRows = await sbGet('gmail_leads',
+          `?cs_id=eq.${cs.id}&gmail_msg_id=in.(${allIds.map(id => `"${id}"`).join(',')})&select=gmail_msg_id`
+        ).catch(() => []);
+        const existingIds = new Set((existingRows || []).map(r => r.gmail_msg_id));
+        const messages = allMessages.filter(m => !existingIds.has(m.id));
+        log.emails_new = messages.length;
+        log.emails_skip = allIds.length - messages.length;
+
+        if (!messages.length) {
+          await sbPatch('cs_profiles', `?id=eq.${cs.id}`, { gmail_last_checked: new Date().toISOString() });
+          results.push(log);
+          continue;
+        }
 
         const processedThreads = new Set();
 
