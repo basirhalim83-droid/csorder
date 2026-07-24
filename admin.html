@@ -32,6 +32,16 @@
       Overview
     </div>
 
+    <div class="nav-item" id="nav-dashboard" onclick="switchPage('dashboard')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </span>
+      Dashboard
+    </div>
+
     <div class="nav-item" id="nav-users" onclick="switchPage('users')">
       <span class="nav-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -199,6 +209,71 @@
           </thead>
           <tbody id="ov-tbody">
             <tr><td colspan="9" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: DASHBOARD ══ -->
+  <div id="page-dashboard" class="page">
+    <div class="page-title">Dashboard Orderan</div>
+    <div class="page-sub">Semua CS</div>
+
+    <!-- Filter bar -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem">
+      <input type="date" id="adash-date" class="f-input" style="width:auto;min-width:150px" onchange="adashRender()" />
+      <select id="adash-cs-filter" class="f-input" style="width:auto;min-width:160px" onchange="adashRender()">
+        <option value="">Semua CS</option>
+      </select>
+      <button class="btn-secondary" onclick="loadAdminDash()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+    </div>
+
+    <!-- Stats cards -->
+    <div class="admin-stat-grid" style="margin-bottom:1rem">
+      <div class="admin-stat-card">
+        <div class="ast-label">Total</div>
+        <div class="ast-value s-total" id="adash-total">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Menunggu</div>
+        <div class="ast-value s-accent" id="adash-tunggu">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Kirim</div>
+        <div class="ast-value s-kirim" id="adash-kirim">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Hold</div>
+        <div class="ast-value s-hold" id="adash-hold">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Cancel</div>
+        <div class="ast-value s-cancel" id="adash-cancel">—</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-scroll" style="max-height:calc(100vh - 360px)">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nama CS</th>
+              <th>Waktu</th>
+              <th>Nama Customer</th>
+              <th>No HP</th>
+              <th>Jumlah Pesanan</th>
+              <th>Pembayaran</th>
+              <th>Total</th>
+              <th>Validasi</th>
+              <th>ACC SPV</th>
+              <th>Noted</th>
+            </tr>
+          </thead>
+          <tbody id="adash-tbody">
+            <tr><td colspan="11" class="empty-state">Pilih tanggal dan klik Refresh.</td></tr>
           </tbody>
         </table>
       </div>
@@ -676,13 +751,14 @@ function resetTemplate() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
+  ['overview','dashboard','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
+  if (name === 'dashboard')   loadAdminDash();
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
   if (name === 'sku')         loadSku();
@@ -1918,6 +1994,132 @@ function showToast(msg, type = 'info') {
   t.textContent = msg;
   wrap.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ══ ADMIN DASHBOARD ═══════════════════════════════════════════════════════════
+let adashAllData = [];
+let adashCsMap   = {};
+
+function adashTodayStr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+}
+
+async function loadAdminDash() {
+  const dateInput = document.getElementById('adash-date');
+  if (!dateInput.value) dateInput.value = adashTodayStr();
+  const date = dateInput.value;
+
+  const tbody = document.getElementById('adash-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Memuat...</td></tr>';
+
+  // Reset stats
+  ['adash-total','adash-tunggu','adash-kirim','adash-hold','adash-cancel'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+
+  try {
+    // Fetch orderan + cs_profiles parallel
+    const [ordersRes, csRes] = await Promise.all([
+      sb.from('orderan_masuk')
+        .select('id,cs_id,cs_nama,nama,hp,jumlah_pesanan,pembayaran,total_pembayaran,acc_spv,noted,created_at,tanggal,is_dup_today,is_dup_all,is_rts,is_wilayah_rawan,is_wajib_transfer,receiver_score,iklan_verified,ss_iklan_url,ss_deal_url')
+        .eq('tanggal', date)
+        .order('created_at', { ascending: false }),
+      sb.from('cs_profiles').select('id,nama').order('nama')
+    ]);
+
+    if (ordersRes.error) throw ordersRes.error;
+    adashAllData = ordersRes.data || [];
+
+    // Build CS map & populate filter
+    adashCsMap = {};
+    (csRes.data || []).forEach(c => { adashCsMap[c.id] = c.nama; });
+    adashPopulateCsFilter(csRes.data || []);
+
+    adashRender();
+  } catch(e) {
+    showToast('Gagal load dashboard: ' + e.message, 'error');
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Gagal memuat data.</td></tr>';
+  }
+}
+
+function adashPopulateCsFilter(csList) {
+  const sel = document.getElementById('adash-cs-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Semua CS</option>' +
+    csList.map(c => `<option value="${c.id}">${c.nama}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function adashRender() {
+  const csFilter = document.getElementById('adash-cs-filter').value;
+  const rows = csFilter ? adashAllData.filter(r => r.cs_id === csFilter) : adashAllData;
+
+  // Stats
+  document.getElementById('adash-total').textContent  = rows.length;
+  document.getElementById('adash-tunggu').textContent = rows.filter(r => !r.acc_spv).length;
+  document.getElementById('adash-kirim').textContent  = rows.filter(r => r.acc_spv === 'KIRIM').length;
+  document.getElementById('adash-hold').textContent   = rows.filter(r => r.acc_spv === 'HOLD').length;
+  document.getElementById('adash-cancel').textContent = rows.filter(r => r.acc_spv === 'CANCEL').length;
+
+  const tbody = document.getElementById('adash-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Belum ada orderan.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const rowClass = r.acc_spv === 'KIRIM' ? 'row-kirim'
+      : r.acc_spv === 'HOLD'   ? 'row-hold'
+      : r.acc_spv === 'CANCEL' ? 'row-cancel'
+      : r.is_dup_today         ? 'row-dup'
+      : r.is_rts               ? 'row-rts' : '';
+
+    // Validasi badges
+    const badges = [];
+    if (r.is_dup_today)       badges.push('<span class="badge badge-hold">DUP HARI INI</span>');
+    if (r.is_dup_all)         badges.push('<span class="badge badge-warn">DUP ALL</span>');
+    if (r.is_rts)             badges.push('<span class="badge badge-rts">RTS</span>');
+    if (r.is_wajib_transfer)  badges.push('<span class="badge badge-rts">WAJIB TRANSFER</span>');
+    if (r.is_wilayah_rawan)   badges.push('<span class="badge badge-warn">RAWAN</span>');
+    if (r.iklan_verified === true)  badges.push('<span class="badge badge-ok" style="font-size:10px">✅ Klik Iklan</span>');
+    if (r.iklan_verified === false) badges.push('<span class="badge badge-rts" style="font-size:10px">⛔ Tdk Ada Klik</span>');
+    if (!badges.length)       badges.push('<span class="badge badge-ok">AMAN</span>');
+    const valBadge = badges.join(' ');
+
+    // Grade badge
+    const grade = r.receiver_score?.grade;
+    const gradeColor = grade === 'A' || grade === 'B' ? 'var(--green,#22c55e)'
+      : grade === 'C' ? 'var(--warn,#f59e0b)'
+      : 'var(--danger,#ef4444)';
+    const gradeBadge = grade
+      ? `<span style="font-weight:700;color:${gradeColor}">${grade}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+
+    const accBadge = !r.acc_spv
+      ? '<span class="badge badge-pending">Menunggu</span>'
+      : r.acc_spv === 'KIRIM'  ? '<span class="badge badge-kirim">KIRIM</span>'
+      : r.acc_spv === 'HOLD'   ? '<span class="badge badge-hold">HOLD</span>'
+      : r.acc_spv === 'CANCEL' ? '<span class="badge badge-cancel">CANCEL</span>'
+      : r.acc_spv;
+
+    const waktu  = new Date(r.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'});
+    const csNama = r.cs_nama || adashCsMap[r.cs_id] || '—';
+
+    return `<tr class="${rowClass}">
+      <td style="font-family:var(--mono);color:var(--muted)">${i+1}</td>
+      <td style="font-size:12px;font-weight:600">${csNama}</td>
+      <td style="font-family:var(--mono);font-size:12px">${waktu}</td>
+      <td title="${r.nama||''}">${r.nama||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px">${r.hp||'—'}</td>
+      <td style="font-size:12px">${r.jumlah_pesanan||'—'}</td>
+      <td style="font-size:12px">${r.pembayaran||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px">Rp${Number(r.total_pembayaran||0).toLocaleString('id-ID')}</td>
+      <td class="td-validasi">${valBadge}</td>
+      <td>${gradeBadge}</td>
+      <td>${accBadge}</td>
+      <td style="color:var(--muted);font-size:11px" title="${r.noted||''}">${(r.noted||'—').substring(0,30)}${(r.noted||'').length>30?'...':''}</td>
+    </tr>`;
+  }).join('');
 }
 </script>
 </body>
