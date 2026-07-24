@@ -12,6 +12,38 @@
   #page-rekap .table-wrap { flex:1; }
   /* topbar(52) + page padding(40) + judul(52) + cards(90) + gap(30) = ~264 */
   #page-rekap .table-wrap .table-scroll { overflow:auto; max-height:calc(100vh - 264px); max-width:100%; }
+
+  /* ── DATE RANGE PICKER (Dashboard) ── */
+  .adash-drp-wrap{position:relative}
+  .adash-drp-trigger{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:border-color .15s;white-space:nowrap;height:38px}
+  .adash-drp-trigger:hover{border-color:var(--accent)}
+  .adash-drp-dropdown{position:absolute;top:calc(100% + 6px);left:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);display:none;overflow:hidden;min-width:500px}
+  .adash-drp-dropdown.open{display:flex}
+  .adash-drp-presets{width:140px;border-right:1px solid var(--border);padding:8px 0;flex-shrink:0}
+  .adash-drp-preset{display:block;width:100%;text-align:left;padding:7px 14px;font-size:12px;color:var(--text);border:none;background:none;cursor:pointer;transition:all .12s}
+  .adash-drp-preset:hover,.adash-drp-preset.active{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);font-weight:600}
+  .adash-drp-cal{padding:14px;flex:1}
+  .adash-drp-cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .adash-drp-cal-title{font-size:13px;font-weight:600;color:var(--text)}
+  .adash-drp-nav{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .adash-drp-nav:hover{border-color:var(--accent);color:var(--accent)}
+  .adash-drp-days-hdr{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+  .adash-drp-days-hdr span{text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:3px 0}
+  .adash-drp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .adash-drp-day{height:32px;border-radius:6px;border:none;background:none;color:var(--text);font-size:12px;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center}
+  .adash-drp-day:hover:not(.empty){background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+  .adash-drp-day.other-month{color:var(--muted);opacity:.4}
+  .adash-drp-day.today{font-weight:700;color:var(--accent)}
+  .adash-drp-day.selected,.adash-drp-day.range-start,.adash-drp-day.range-end{background:var(--accent)!important;color:#fff!important;font-weight:600}
+  .adash-drp-day.range-start{border-radius:6px 0 0 6px}
+  .adash-drp-day.range-end{border-radius:0 6px 6px 0}
+  .adash-drp-day.range-start.range-end{border-radius:6px}
+  .adash-drp-day.in-range{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:0;color:var(--text)}
+  .adash-drp-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)}
+  .adash-drp-footer-txt{font-size:11px;color:var(--muted)}
+  .adash-drp-footer-txt span{color:var(--text);font-weight:500}
+  .adash-drp-apply{padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+  .adash-drp-cancel{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/auth.js"></script>
@@ -228,9 +260,35 @@
 
     <!-- Filter bar -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem">
-      <input type="date" id="adash-date" class="f-input" style="width:auto;min-width:150px" onchange="loadAdminDash()" />
-      <span style="color:var(--muted);font-size:13px">—</span>
-      <input type="date" id="adash-date-end" class="f-input" style="width:auto;min-width:150px" onchange="loadAdminDash()" />
+      <!-- Date Range Picker -->
+      <div class="adash-drp-wrap">
+        <button class="adash-drp-trigger" id="adash-drp-trigger" onclick="adashDrpToggle()">
+          📅 <span id="adash-drp-label">Hari Ini</span> <span style="color:var(--muted);font-size:11px">▾</span>
+        </button>
+        <div class="adash-drp-dropdown" id="adash-drp-dropdown">
+          <div class="adash-drp-presets">
+            <button class="adash-drp-preset active" onclick="adashDrpPreset(1,'Hari Ini',this)">Hari Ini</button>
+            <button class="adash-drp-preset" onclick="adashDrpPresetYesterday(this)">Kemarin</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+            <button class="adash-drp-preset" onclick="adashDrpPreset(7,'7 Hari Terakhir',this)">7 Hari Terakhir</button>
+            <button class="adash-drp-preset" onclick="adashDrpPreset(14,'14 Hari Terakhir',this)">14 Hari Terakhir</button>
+            <button class="adash-drp-preset" onclick="adashDrpPreset(30,'30 Hari Terakhir',this)">30 Hari Terakhir</button>
+            <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+            <button class="adash-drp-preset" onclick="adashDrpPresetThisMonth(this)">Bulan Ini</button>
+            <button class="adash-drp-preset" onclick="adashDrpPresetLastMonth(this)">Bulan Lalu</button>
+          </div>
+          <div style="display:flex;flex-direction:column;flex:1">
+            <div class="adash-drp-cal" id="adash-drp-cal"></div>
+            <div class="adash-drp-footer">
+              <div class="adash-drp-footer-txt"><span id="adash-drp-sel-start">—</span> → <span id="adash-drp-sel-end">—</span></div>
+              <div style="display:flex;gap:6px">
+                <button class="adash-drp-cancel" onclick="adashDrpClose()">Batal</button>
+                <button class="adash-drp-apply" onclick="adashDrpApply()">Terapkan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <select id="adash-cs-filter" class="f-input" style="width:auto;min-width:160px" onchange="adashRender()">
         <option value="">Semua CS</option>
       </select>
@@ -815,7 +873,15 @@ function switchPage(name) {
   });
   const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
-  if (name === 'dashboard')   loadAdminDash();
+  if (name === 'dashboard') {
+    // Init drp ke hari ini kalau belum pernah dipilih
+    if (!adashDrpStart) {
+      const t = new Date(); t.setHours(0,0,0,0);
+      adashDrpStart = t; adashDrpEnd = t;
+      adashDrpFltStart = adashTodayStr(); adashDrpFltEnd = adashTodayStr();
+    }
+    loadAdminDash();
+  }
   if (name === 'rekap')       loadRekap();
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
@@ -2330,16 +2396,147 @@ function adashTodayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 }
 
-async function loadAdminDash() {
-  const dateInput    = document.getElementById('adash-date');
-  const dateEndInput = document.getElementById('adash-date-end');
-  if (!dateInput.value) dateInput.value = adashTodayStr();
-  // Kalau end date kosong atau < start date → sama dengan start date (single day)
-  if (!dateEndInput.value || dateEndInput.value < dateInput.value) {
-    dateEndInput.value = dateInput.value;
+// ── Date Range Picker state ────────────────────────────────────────────────
+const ADASH_MONTHS = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+const ADASH_DAYS   = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'];
+let adashDrpStart    = null; // Date
+let adashDrpEnd      = null; // Date
+let adashDrpViewY    = new Date().getFullYear();
+let adashDrpViewM    = new Date().getMonth();
+let adashDrpFltStart = adashTodayStr(); // 'YYYY-MM-DD' used for query
+let adashDrpFltEnd   = adashTodayStr();
+
+function adashDrpFmt(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+}
+function adashDrpToStr(d) {
+  return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+}
+function adashDrpToggle() {
+  const dd = document.getElementById('adash-drp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    adashDrpRender();
+    setTimeout(() => document.addEventListener('click', adashDrpOutside), 0);
+  } else {
+    document.removeEventListener('click', adashDrpOutside);
   }
-  const dateStart = dateInput.value;
-  const dateEnd   = dateEndInput.value;
+}
+function adashDrpClose() {
+  document.getElementById('adash-drp-dropdown').classList.remove('open');
+  document.removeEventListener('click', adashDrpOutside);
+}
+function adashDrpOutside(e) {
+  const dd = document.getElementById('adash-drp-dropdown');
+  const tr = document.getElementById('adash-drp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) adashDrpClose();
+}
+function adashDrpSetActive(btn) {
+  document.querySelectorAll('.adash-drp-preset').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+function adashDrpPreset(days, label, btn) {
+  const end   = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end.getTime() - (days-1)*864e5);
+  adashDrpStart = start; adashDrpEnd = end;
+  adashDrpSetActive(btn); adashDrpUpdateSel(); adashDrpRender();
+}
+function adashDrpPresetYesterday(btn) {
+  const d = new Date(Date.now() - 864e5); d.setHours(0,0,0,0);
+  adashDrpStart = new Date(d); adashDrpEnd = new Date(d);
+  adashDrpSetActive(btn); adashDrpUpdateSel(); adashDrpRender();
+}
+function adashDrpPresetThisMonth(btn) {
+  const n = new Date();
+  adashDrpStart = new Date(n.getFullYear(), n.getMonth(), 1);
+  adashDrpEnd   = new Date(); adashDrpEnd.setHours(0,0,0,0);
+  adashDrpSetActive(btn); adashDrpUpdateSel(); adashDrpRender();
+}
+function adashDrpPresetLastMonth(btn) {
+  const n = new Date();
+  adashDrpStart = new Date(n.getFullYear(), n.getMonth()-1, 1);
+  adashDrpEnd   = new Date(n.getFullYear(), n.getMonth(), 0);
+  adashDrpSetActive(btn); adashDrpUpdateSel(); adashDrpRender();
+}
+function adashDrpUpdateSel() {
+  document.getElementById('adash-drp-sel-start').textContent = adashDrpFmt(adashDrpStart);
+  document.getElementById('adash-drp-sel-end').textContent   = adashDrpFmt(adashDrpEnd);
+}
+function adashDrpClickDay(y, m, d) {
+  const clicked = new Date(y, m, d);
+  if (!adashDrpStart || (adashDrpStart && adashDrpEnd)) {
+    adashDrpStart = clicked; adashDrpEnd = null;
+  } else {
+    if (clicked < adashDrpStart) { adashDrpEnd = adashDrpStart; adashDrpStart = clicked; }
+    else adashDrpEnd = clicked;
+    adashDrpSetActive(null);
+  }
+  adashDrpUpdateSel(); adashDrpRender();
+}
+function adashDrpNav(dir) {
+  adashDrpViewM += dir;
+  if (adashDrpViewM > 11) { adashDrpViewM = 0; adashDrpViewY++; }
+  if (adashDrpViewM < 0)  { adashDrpViewM = 11; adashDrpViewY--; }
+  adashDrpRender();
+}
+function adashDrpRender() {
+  const y = adashDrpViewY, m = adashDrpViewM;
+  const firstDay   = new Date(y, m, 1).getDay();
+  const startPad   = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMo   = new Date(y, m+1, 0).getDate();
+  const prevDays   = new Date(y, m, 0).getDate();
+  const today      = new Date(); today.setHours(0,0,0,0);
+
+  let html = `<div class="adash-drp-cal-hdr">
+    <button class="adash-drp-nav" onclick="adashDrpNav(-1)">‹</button>
+    <div class="adash-drp-cal-title">${ADASH_MONTHS[m]} ${y}</div>
+    <button class="adash-drp-nav" onclick="adashDrpNav(1)">›</button>
+  </div>
+  <div class="adash-drp-days-hdr">${ADASH_DAYS.map(d=>`<span>${d}</span>`).join('')}</div>
+  <div class="adash-drp-days">`;
+
+  for (let i = startPad; i > 0; i--) {
+    html += `<button class="adash-drp-day other-month" onclick="adashDrpNav(-1)">${prevDays-i+1}</button>`;
+  }
+  for (let d = 1; d <= daysInMo; d++) {
+    const cur     = new Date(y, m, d);
+    const isToday = cur.getTime() === today.getTime();
+    const isStart = adashDrpStart && cur.getTime() === adashDrpStart.getTime();
+    const isEnd   = adashDrpEnd   && cur.getTime() === adashDrpEnd.getTime();
+    const inRange = adashDrpStart && adashDrpEnd && cur > adashDrpStart && cur < adashDrpEnd;
+    let cls = 'adash-drp-day';
+    if (isStart && isEnd) cls += ' selected';
+    else if (isStart) cls += ' range-start';
+    else if (isEnd)   cls += ' range-end';
+    else if (inRange) cls += ' in-range';
+    if (isToday) cls += ' today';
+    html += `<button class="${cls}" onclick="adashDrpClickDay(${y},${m},${d})">${d}</button>`;
+  }
+  const total = startPad + daysInMo;
+  const rem   = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) {
+    html += `<button class="adash-drp-day other-month" onclick="adashDrpNav(1)">${d}</button>`;
+  }
+  html += '</div>';
+  document.getElementById('adash-drp-cal').innerHTML = html;
+}
+function adashDrpApply() {
+  if (!adashDrpStart) return;
+  const end = adashDrpEnd || adashDrpStart;
+  adashDrpFltStart = adashDrpToStr(adashDrpStart);
+  adashDrpFltEnd   = adashDrpToStr(end);
+  const label = adashDrpFltStart === adashDrpFltEnd
+    ? adashDrpFmt(adashDrpStart)
+    : `${adashDrpFmt(adashDrpStart)} — ${adashDrpFmt(end)}`;
+  document.getElementById('adash-drp-label').textContent = label;
+  adashDrpClose();
+  loadAdminDash();
+}
+
+async function loadAdminDash() {
+  const dateStart = adashDrpFltStart || adashTodayStr();
+  const dateEnd   = adashDrpFltEnd   || dateStart;
 
   const tbody = document.getElementById('adash-tbody');
   tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Memuat...</td></tr>';
