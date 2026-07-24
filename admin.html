@@ -52,9 +52,12 @@
 
 <!-- ── SIDEBAR ── -->
 <aside class="sidebar">
-  <div class="sidebar-logo">
-    <div class="logo-mark">CS Input</div>
-    <div class="logo-sub">admin panel</div>
+  <div class="sidebar-logo" style="display:flex;align-items:center;gap:10px">
+    <img src="img/logo-adsy.png" alt="Adsy" style="width:32px;height:32px;object-fit:contain;border-radius:8px;flex-shrink:0">
+    <div>
+      <div class="logo-mark">CS Input</div>
+      <div class="logo-sub">admin panel</div>
+    </div>
   </div>
 
   <nav class="sidebar-nav">
@@ -1139,7 +1142,7 @@ async function runRevalidasiIklan() {
   btn.textContent = '⏳ Memproses...';
   statusEl.style.display = 'block';
   statusEl.style.color   = 'var(--muted)';
-  statusEl.textContent   = 'Mengambil orderan dengan "Tdk Ada Klik"...';
+  statusEl.textContent   = 'Mengambil orderan dengan tidak ada klik iklan...';
 
   try {
     // Ambil orderan iklan_verified=false sesuai filter tanggal dashboard
@@ -1162,11 +1165,11 @@ async function runRevalidasiIklan() {
 
     if (!allOrders.length) {
       statusEl.style.color = 'var(--green,#22c55e)';
-      statusEl.textContent = '✅ Tidak ada "Tdk Ada Klik" di rentang tanggal ini.';
+      statusEl.textContent = '✅ Tidak ada tidak ada klik iklan di rentang tanggal ini.';
       return;
     }
 
-    statusEl.textContent = `Ditemukan ${allOrders.length} orderan "Tdk Ada Klik". Mengecek leads...`;
+    statusEl.textContent = `Ditemukan ${allOrders.length} orderan tidak ada klik iklan. Mengecek leads...`;
 
     // Ambil semua gmail_leads sekaligus (hp + cs_id + email_date)
     let allLeads = [], lFrom = 0;
@@ -2643,7 +2646,7 @@ function adashRender() {
     if (r.is_wajib_transfer)  badges.push('<span class="badge badge-rts">WAJIB TRANSFER</span>');
     if (r.is_wilayah_rawan)   badges.push('<span class="badge badge-warn">RAWAN</span>');
     if (r.iklan_verified === true)  badges.push('<span class="badge badge-ok" style="font-size:10px">✅ Klik Iklan</span>');
-    if (r.iklan_verified === false) badges.push('<span class="badge badge-rts" style="font-size:10px">⛔ Tdk Ada Klik</span>');
+    if (r.iklan_verified === false) badges.push('<span class="badge badge-rts" style="font-size:10px">⛔ Tidak ada klik iklan</span>');
     if (!badges.length)       badges.push('<span class="badge badge-ok">AMAN</span>');
     const valBadge = badges.join(' ');
 
