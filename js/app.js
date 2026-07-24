@@ -1199,8 +1199,9 @@ async function validateOngkirTarif() {
   hint.className = 'val-hint';
   hint.textContent = '';
 
-  const kec  = val('f-kecamatan');
-  const kab  = val('f-kabupaten');
+  const kec     = val('f-kecamatan');
+  const kab     = val('f-kabupaten');
+  const kodepos = val('f-kodepos');
   const eksp = extractEkspedisi(val('f-no'));
   const rincianVal = val('f-rincian');
   if (!kec || !kab || !eksp || !rincianVal) return;
@@ -1210,9 +1211,13 @@ async function validateOngkirTarif() {
   const [ongkir] = parts; // ongkir KOTOR -- pot.ongkir itu diskon promo CS ke customer,
   if (!ongkir) return;    // bukan bagian tarif asli, jadi gak ikut dibandingin ke estimasi
 
+  // Pakai kodepos untuk search yang lebih presisi, fallback ke kec+kab
+  const keyword = kodepos || (kec + ' ' + kab);
+
   let json;
   try {
-    const r = await fetch(`/api/ongkir?keyword=${encodeURIComponent(kec + ' ' + kab)}&weight=1`);
+    const params = new URLSearchParams({ keyword, weight: 1, kecamatan: kec, kabupaten: kab });
+    const r = await fetch(`/api/ongkir?${params}`);
     json = await r.json();
   } catch (e) { return; }
   if (!json?.ok) return;
