@@ -42,6 +42,15 @@
       Dashboard
     </div>
 
+    <div class="nav-item" id="nav-rekap" onclick="switchPage('rekap')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+        </svg>
+      </span>
+      Rekap CS
+    </div>
+
     <div class="nav-item" id="nav-users" onclick="switchPage('users')">
       <span class="nav-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -265,6 +274,41 @@
           </thead>
           <tbody id="adash-tbody">
             <tr><td colspan="11" class="empty-state">Pilih tanggal dan klik Refresh.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: REKAP CS ══ -->
+  <div id="page-rekap" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Rekap CS</div>
+        <div class="page-sub" style="margin:0">Order per hari per CS</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <!-- Filter bulan -->
+        <input type="month" id="rekap-month" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);font-family:inherit" onchange="loadRekap()" />
+        <button class="btn-secondary" onclick="loadRekap()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Filter pills -->
+    <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+      <button id="rekap-pill-input"  onclick="rekapSetFilter('input')"  class="rekap-pill rekap-pill-active" style="padding:5px 14px;border-radius:99px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Total Input</button>
+      <button id="rekap-pill-kirim"  onclick="rekapSetFilter('kirim')"  class="rekap-pill" style="padding:5px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Kirim</button>
+      <button id="rekap-pill-hold"   onclick="rekapSetFilter('hold')"   class="rekap-pill" style="padding:5px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Hold</button>
+      <button id="rekap-pill-cancel" onclick="rekapSetFilter('cancel')" class="rekap-pill" style="padding:5px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Cancel</button>
+    </div>
+
+    <!-- Tabel -->
+    <div class="table-wrap">
+      <div class="table-scroll" style="max-height:calc(100vh - 260px);overflow-x:auto">
+        <table id="rekap-table">
+          <thead id="rekap-thead"></thead>
+          <tbody id="rekap-tbody">
+            <tr><td colspan="3" class="empty-state">Pilih bulan untuk melihat rekap.</td></tr>
           </tbody>
         </table>
       </div>
@@ -742,14 +786,15 @@ function resetTemplate() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','dashboard','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
+  ['overview','dashboard','rekap','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard')   loadAdminDash();
+  if (name === 'rekap')       loadRekap();
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
   if (name === 'sku')         loadSku();
@@ -2002,6 +2047,145 @@ function showToast(msg, type = 'info') {
   t.textContent = msg;
   wrap.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ══ REKAP CS ══════════════════════════════════════════════════════════════════
+let rekapRawData  = [];
+let rekapFilter   = 'input'; // 'input' | 'kirim' | 'hold' | 'cancel'
+const HARI_ID     = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+function rekapSetFilter(f) {
+  rekapFilter = f;
+  ['input','kirim','hold','cancel'].forEach(k => {
+    const el = document.getElementById('rekap-pill-' + k);
+    if (!el) return;
+    if (k === f) {
+      el.style.background = 'var(--accent)';
+      el.style.color      = '#fff';
+      el.style.borderColor = 'var(--accent)';
+    } else {
+      el.style.background  = 'var(--card)';
+      el.style.color       = 'var(--text)';
+      el.style.borderColor = 'var(--border)';
+    }
+  });
+  rekapRender();
+}
+
+async function loadRekap() {
+  const monthEl = document.getElementById('rekap-month');
+  if (!monthEl.value) {
+    const now = new Date();
+    monthEl.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [year, month] = monthEl.value.split('-').map(Number);
+  const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDay   = new Date(year, month, 0).getDate();
+  const endDate   = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+
+  document.getElementById('rekap-tbody').innerHTML =
+    '<tr><td colspan="3" class="empty-state">Memuat...</td></tr>';
+
+  try {
+    // Pagination loop
+    const PAGE = 1000;
+    let allData = [], from = 0;
+    while (true) {
+      const { data: batch, error } = await sb.from('orderan_masuk')
+        .select('cs_nama,tanggal,acc_spv')
+        .gte('tanggal', startDate)
+        .lte('tanggal', endDate)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      allData = allData.concat(batch || []);
+      if (!batch || batch.length < PAGE) break;
+      from += PAGE;
+    }
+    rekapRawData = allData;
+    rekapRender();
+  } catch(e) {
+    showToast('Gagal load rekap: ' + e.message, 'error');
+  }
+}
+
+function rekapRender() {
+  const monthEl = document.getElementById('rekap-month');
+  if (!monthEl.value) return;
+  const [year, month] = monthEl.value.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+
+  // Filter data sesuai pill
+  const filtered = rekapRawData.filter(r => {
+    if (rekapFilter === 'input')  return true;
+    if (rekapFilter === 'kirim')  return r.acc_spv === 'KIRIM';
+    if (rekapFilter === 'hold')   return r.acc_spv === 'HOLD';
+    if (rekapFilter === 'cancel') return r.acc_spv === 'CANCEL';
+    return true;
+  });
+
+  // Kumpulkan semua nama CS unik, sort
+  const csSet = [...new Set(filtered.map(r => r.cs_nama || '—'))].sort();
+
+  // Build pivot: { 'YYYY-MM-DD': { 'cs_nama': count } }
+  const pivot = {};
+  filtered.forEach(r => {
+    const tgl = (r.tanggal || '').slice(0,10);
+    const cs  = r.cs_nama || '—';
+    if (!pivot[tgl]) pivot[tgl] = {};
+    pivot[tgl][cs] = (pivot[tgl][cs] || 0) + 1;
+  });
+
+  // Header
+  const thead = document.getElementById('rekap-thead');
+  thead.innerHTML = `<tr>
+    <th style="min-width:110px;position:sticky;left:0;z-index:2;background:var(--card)">Tanggal</th>
+    ${csSet.map(cs => `<th style="min-width:80px;text-align:center">${cs}</th>`).join('')}
+    <th style="min-width:70px;text-align:center;color:var(--accent)">Total</th>
+  </tr>`;
+
+  // Rows per hari
+  const MONTHS_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+  const monthName = MONTHS_ID[month - 1];
+  let totalPerCs = {};
+  csSet.forEach(cs => { totalPerCs[cs] = 0; });
+  let grandTotal = 0;
+
+  const rows = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr  = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayOfWk  = new Date(dateStr).getDay(); // 0=Min
+    const isSunday = dayOfWk === 0;
+    const dayLabel = `<strong>${d}</strong> <span style="color:var(--muted);font-size:11px">${monthName}</span> <span style="color:${isSunday?'var(--danger,#ef4444)':'var(--muted)'};font-size:11px">${HARI_ID[dayOfWk]}</span>`;
+
+    const dayData  = pivot[dateStr] || {};
+    const rowTotal = csSet.reduce((s, cs) => s + (dayData[cs] || 0), 0);
+    grandTotal += rowTotal;
+    csSet.forEach(cs => { totalPerCs[cs] += (dayData[cs] || 0); });
+
+    const rowStyle = isSunday ? 'background:var(--bg,#f8f9fa);opacity:0.6' : '';
+    const cells = csSet.map(cs => {
+      const v = dayData[cs] || 0;
+      return `<td style="text-align:center;font-family:var(--mono);font-weight:${v>0?'700':'400'};color:${v>0?'var(--text)':'var(--muted)'}">${v > 0 ? v : '<span style="opacity:.3">0</span>'}</td>`;
+    }).join('');
+
+    rows.push(`<tr style="${rowStyle}">
+      <td style="position:sticky;left:0;background:${isSunday?'var(--bg,#f8f9fa)':'var(--card)'};font-size:13px">${dayLabel}</td>
+      ${cells}
+      <td style="text-align:center;font-family:var(--mono);font-weight:700;color:${rowTotal>0?'var(--accent)':'var(--muted)'}">${rowTotal > 0 ? rowTotal : '<span style="opacity:.3">0</span>'}</td>
+    </tr>`);
+  }
+
+  // Baris total bawah
+  const totalCells = csSet.map(cs =>
+    `<td style="text-align:center;font-family:var(--mono);font-weight:700;color:var(--accent)">${totalPerCs[cs]}</td>`
+  ).join('');
+  rows.push(`<tr style="border-top:2px solid var(--border);background:var(--card)">
+    <td style="position:sticky;left:0;background:var(--card);font-weight:700;font-size:13px">Total</td>
+    ${totalCells}
+    <td style="text-align:center;font-family:var(--mono);font-weight:700;color:var(--accent)">${grandTotal}</td>
+  </tr>`);
+
+  document.getElementById('rekap-tbody').innerHTML = rows.join('');
 }
 
 // ══ ADMIN DASHBOARD ═══════════════════════════════════════════════════════════
