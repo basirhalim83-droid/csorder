@@ -1821,12 +1821,6 @@ async function loadProduk() {
     }
     const skuFilter = skuSel.value;
 
-    // Update header kolom qty sesuai SKU yang dipilih
-    const qLabel = skuFilter || 'Qty';
-    document.getElementById('prod-th-q1').textContent = qLabel + ' 1';
-    document.getElementById('prod-th-q2').textContent = qLabel + ' 2';
-    document.getElementById('prod-th-q3').textContent = qLabel + ' 3+';
-
     const PAGE=1000;let allData=[],from=0;
     while(true){
       let q=sb.from('orderan_masuk')
