@@ -874,27 +874,39 @@ async function doLogout() {
 
 // ══ GMAIL POLLER (manual trigger) ═════════════════════════════════════════════
 async function runGmailPoll() {
-  const btn = document.getElementById('gmail-poll-btn');
+  const btn      = document.getElementById('gmail-poll-btn');
   const statusEl = document.getElementById('gmail-poll-status');
-  btn.disabled = true;
+  btn.disabled   = true;
   btn.textContent = '⏳ Mengambil...';
   statusEl.style.color = 'var(--muted)';
-  statusEl.textContent = 'Sedang menghubungi Gmail semua CS...';
-  try {
-    const res = await fetch('/api/gmail-cs', {
-      method: 'POST',
-      headers: { 'x-cron-secret': 'Sukses2023' },
-    });
-    const d = await res.json();
-    if (!d.ok) throw new Error(d.error || 'Gagal');
 
-    const totalSaved = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.saved || 0), 0);
-    const processed  = d.processed || 0;
-    const skipped    = d.skipped   || 0;
-    const parts = [`✅ Selesai (${d.duration_ms}ms)`, `${processed} CS diproses`, `${totalSaved} email baru disimpan`];
-    if (skipped > 0) parts.push(`${skipped} CS diskip (cron akan lanjutkan)`);
+  let totalSaved = 0, totalProcessed = 0, round = 0;
+  const MAX_ROUNDS = 20; // max 20 putaran (~160 detik) supaya tidak infinite
+
+  try {
+    while (round < MAX_ROUNDS) {
+      round++;
+      statusEl.textContent = `Putaran ${round} — sedang ambil email semua CS...`;
+
+      const res = await fetch('/api/gmail-cs', {
+        method: 'POST',
+        headers: { 'x-cron-secret': 'Sukses2023' },
+      });
+      const d = await res.json();
+      if (!d.ok) throw new Error(d.error || 'Gagal');
+
+      const roundSaved = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.saved || 0), 0);
+      totalSaved     += roundSaved;
+      totalProcessed += (d.processed || 0);
+
+      statusEl.textContent = `Putaran ${round} selesai (${d.duration_ms}ms) · ${totalSaved} email tersimpan · ${d.skipped || 0} CS tersisa...`;
+
+      // Kalau sudah tidak ada yang diskip → semua CS sudah diproses
+      if (!d.skipped || d.skipped === 0) break;
+    }
+
     statusEl.style.color = 'var(--green, #22c55e)';
-    statusEl.textContent = parts.join(' · ');
+    statusEl.textContent = `✅ Selesai ${round} putaran · ${totalProcessed} CS diproses · ${totalSaved} email baru disimpan`;
   } catch(e) {
     statusEl.style.color = 'var(--danger, #ef4444)';
     statusEl.textContent = '❌ Error: ' + e.message;
