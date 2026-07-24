@@ -184,10 +184,10 @@ function drpNav(dir) {
   document.getElementById('mobile-avatar').textContent     = nama.charAt(0).toUpperCase();
   document.getElementById('topbar-date').textContent       = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-  // Link Admin Panel cuma muncul buat role admin
+  // Admin langsung redirect ke admin panel
   if (currentProfile.role === 'admin') {
-    const navAdmin = document.getElementById('nav-admin');
-    if (navAdmin) navAdmin.style.display = 'flex';
+    window.location.href = 'admin.html';
+    return;
   }
 
   // Restore theme
