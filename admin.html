@@ -227,13 +227,14 @@
               <th>Email</th>
               <th>No WA</th>
               <th>Role</th>
+              <th>Gmail</th>
               <th>Order Hari Ini</th>
               <th>Bergabung</th>
               <th>Aksi</th>
             </tr>
           </thead>
           <tbody id="users-tbody">
-            <tr><td colspan="8" class="empty-state">Memuat data...</td></tr>
+            <tr><td colspan="9" class="empty-state">Memuat data...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1008,7 +1009,7 @@ async function loadOverview() {
 async function loadUsers() {
   const today = todayStr();
   const tbody = document.getElementById('users-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Memuat...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Memuat...</td></tr>';
 
   try {
     const [usersRes, ordersRes] = await Promise.all([
@@ -1037,7 +1038,7 @@ function renderUsersTable(users, countMap) {
   const tbody  = document.getElementById('users-tbody');
 
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Tidak ada user.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Tidak ada user.</td></tr>';
     return;
   }
 
@@ -1056,6 +1057,21 @@ function renderUsersTable(users, countMap) {
       ? `<button class="btn-sm btn-sm-warn" onclick="toggleRole('${u.id}','admin')">Jadikan CS</button>`
       : `<button class="btn-sm btn-sm-accent" onclick="toggleRole('${u.id}','cs')">Jadikan Admin</button>`;
 
+    let gmailBadge;
+    if (u.gmail_email && u.gmail_refresh_token) {
+      gmailBadge = `<span style="font-size:11px;color:var(--green,#22c55e);display:flex;align-items:center;gap:4px">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--green,#22c55e);flex-shrink:0"></span>
+        ${u.gmail_email}
+      </span>`;
+    } else if (u.gmail_email && !u.gmail_refresh_token) {
+      gmailBadge = `<span style="font-size:11px;color:var(--danger,#ef4444);display:flex;align-items:center;gap:4px" title="${u.gmail_email}">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--danger,#ef4444);flex-shrink:0"></span>
+        Perlu Reconnect
+      </span>`;
+    } else {
+      gmailBadge = `<span style="font-size:11px;color:var(--muted)">—</span>`;
+    }
+
     return `<tr>
       <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
       <td>
@@ -1067,6 +1083,7 @@ function renderUsersTable(users, countMap) {
       <td style="color:var(--muted);font-size:12px">${u.email||'—'}</td>
       <td style="font-family:var(--mono);font-size:12px">${u.no_wa||'—'}</td>
       <td>${roleBadge}</td>
+      <td>${gmailBadge}</td>
       <td style="font-weight:600;color:var(--accent);font-family:var(--mono)">${orderCnt}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td>${roleBtn}</td>
