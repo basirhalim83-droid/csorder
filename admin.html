@@ -2021,7 +2021,7 @@ async function loadAdminDash() {
     // Fetch orderan + cs_profiles parallel
     const [ordersRes, csRes] = await Promise.all([
       sb.from('orderan_masuk')
-        .select('id,cs_id,cs_nama,nama,hp,jumlah_pesanan,pembayaran,total_pembayaran,acc_spv,noted,created_at,tanggal,is_dup_today,is_dup_all,is_rts,is_wilayah_rawan,is_wajib_transfer,receiver_score,iklan_verified,ss_iklan_url,ss_deal_url')
+        .select('id,cs_id,cs_nama,nama,hp,jumlah_pesanan,pembayaran,total_pembayaran,acc_spv,noted,created_at,tanggal,is_dup_today,is_dup_all,is_rts,is_wilayah_rawan,is_wajib_transfer,receiver_score,iklan_verified')
         .eq('tanggal', date)
         .order('created_at', { ascending: false }),
       sb.from('cs_profiles').select('id,nama').order('nama')
