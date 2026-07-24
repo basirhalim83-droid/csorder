@@ -1618,10 +1618,10 @@ async function loadAnalisis() {
     let allData = [], from = 0;
     while (true) {
       let q = sb.from('orderan_masuk')
-        .select('cs_nama,tanggal,pembayaran,jumlah_pesanan')
+        .select('cs_nama,tanggal,pembayaran')
         .gte('tanggal', analFltStart)
         .lte('tanggal', analFltEnd);
-      if (produkFilter) q = q.ilike('jumlah_pesanan', `%${produkFilter}%`);
+      if (produkFilter) q = q.ilike('nama', `%|${produkFilter}%`);
       const { data: batch, error } = await q.range(from, from + PAGE - 1);
       if (error) throw error;
       allData = allData.concat(batch || []);
@@ -1824,9 +1824,9 @@ async function loadProduk() {
     const PAGE=1000;let allData=[],from=0;
     while(true){
       let q=sb.from('orderan_masuk')
-        .select('cs_nama,tanggal,quantity,jumlah_pesanan')
+        .select('cs_nama,tanggal,quantity')
         .gte('tanggal',prodFltStart).lte('tanggal',prodFltEnd);
-      if(skuFilter) q=q.ilike('jumlah_pesanan',`%${skuFilter}%`);
+      if(skuFilter) q=q.ilike('nama',`%|${skuFilter}%`);
       const {data:batch,error}=await q.range(from,from+PAGE-1);
       if(error)throw error;
       allData=allData.concat(batch||[]);
