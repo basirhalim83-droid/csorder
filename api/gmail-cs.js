@@ -77,7 +77,11 @@ async function searchEmails(accessToken) {
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const d = await r.json();
-  if (d.error) throw new Error(`Gmail API error: ${d.error.code} — ${d.error.message}`);
+  if (d.error) {
+    const err = new Error(`Gmail API error: ${d.error.code} — ${d.error.message}`);
+    err.gmailCode = d.error.code;
+    throw err;
+  }
   return d.messages || [];
 }
 async function getEmail(accessToken, id) {
@@ -350,6 +354,10 @@ module.exports = async function handler(req, res) {
 
       } catch(e) {
         log.errors.push({ error: e.message });
+        // Kalau 403 (scope kurang) → hapus refresh token supaya CS tahu perlu reconnect
+        if (e.gmailCode === 403) {
+          await sbPatch('cs_profiles', `?id=eq.${cs.id}`, { gmail_refresh_token: null }).catch(() => {});
+        }
       }
       results.push(log);
     }
