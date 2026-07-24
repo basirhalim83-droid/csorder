@@ -583,7 +583,7 @@
     <!-- Tabel per CS -->
     <div class="table-wrap" style="margin-bottom:1.25rem">
       <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">Breakdown per CS</div>
-      <div class="table-scroll" style="max-height:calc(100vh - 560px)">
+      <div class="table-scroll" style="max-height:352px">
         <table>
           <thead>
             <tr>
@@ -617,11 +617,12 @@
                 <th>Provinsi</th>
                 <th style="text-align:center">Order</th>
                 <th style="text-align:center">Botol</th>
+                <th style="text-align:right">Omset</th>
                 <th style="text-align:center">%</th>
               </tr>
             </thead>
             <tbody id="prod-prov-tbody">
-              <tr><td colspan="5" class="empty-state">—</td></tr>
+              <tr><td colspan="6" class="empty-state">—</td></tr>
             </tbody>
           </table>
         </div>
@@ -637,11 +638,12 @@
                 <th>Kabupaten / Kota</th>
                 <th style="text-align:center">Order</th>
                 <th style="text-align:center">Botol</th>
+                <th style="text-align:right">Omset</th>
                 <th style="text-align:center">%</th>
               </tr>
             </thead>
             <tbody id="prod-kab-tbody">
-              <tr><td colspan="5" class="empty-state">—</td></tr>
+              <tr><td colspan="6" class="empty-state">—</td></tr>
             </tbody>
           </table>
         </div>
@@ -1868,7 +1870,7 @@ async function loadProduk() {
     const PAGE=1000;let allData=[],from=0;
     while(true){
       let q=sb.from('orderan_masuk')
-        .select('cs_nama,tanggal,quantity,provinsi,kabupaten')
+        .select('cs_nama,tanggal,quantity,provinsi,kabupaten,total_pembayaran')
         .gte('tanggal',prodFltStart).lte('tanggal',prodFltEnd);
       if(skuFilter) q=q.ilike('nama',`%|${skuFilter}%`);
       const {data:batch,error}=await q.range(from,from+PAGE-1);
@@ -1974,9 +1976,10 @@ async function loadProduk() {
       const map={};
       allData.forEach(r=>{
         const label=(r[key]||'').trim()||'—';
-        if(!map[label])map[label]={orders:0,qty:0};
+        if(!map[label])map[label]={orders:0,qty:0,omset:0};
         map[label].orders++;
         map[label].qty+=(parseInt(r.quantity)||1);
+        map[label].omset+=(Number(r.total_pembayaran)||0);
       });
       return Object.entries(map)
         .map(([nama,v])=>({nama,...v}))
@@ -1990,6 +1993,9 @@ async function loadProduk() {
         ? rows.map((r,i)=>{
             const pct=((r.orders/total)*100).toFixed(1);
             const barW=((r.orders/rows[0].orders)*100).toFixed(1);
+            const omsetFmt = r.omset>=1e6
+              ? 'Rp'+(r.omset/1e6).toFixed(1)+'jt'
+              : 'Rp'+r.omset.toLocaleString('id-ID');
             return `<tr>
               <td style="color:var(--muted);font-family:var(--mono);font-size:12px">${i+1}</td>
               <td style="font-size:12px;font-weight:500">
@@ -2000,10 +2006,11 @@ async function loadProduk() {
               </td>
               <td style="text-align:center;font-family:var(--mono);font-weight:700">${r.orders}</td>
               <td style="text-align:center;font-family:var(--mono);color:#3b82f6">${r.qty}</td>
+              <td style="text-align:right;font-family:var(--mono);font-size:12px;color:#22c55e;font-weight:600">${omsetFmt}</td>
               <td style="text-align:center;font-size:12px;color:var(--muted)">${pct}%</td>
             </tr>`;
           }).join('')
-        : `<tr><td colspan="5" class="empty-state">Tidak ada data.</td></tr>`;
+        : `<tr><td colspan="6" class="empty-state">Tidak ada data.</td></tr>`;
     }
 
     renderWilayahTbl('prod-prov-tbody', buildWilayahRows('provinsi'));
