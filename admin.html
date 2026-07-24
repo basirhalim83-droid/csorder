@@ -46,6 +46,7 @@
   .adash-drp-cancel{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="js/auth.js"></script>
 </head>
 <body class="app-body">
@@ -90,6 +91,15 @@
         </svg>
       </span>
       Rekap CS
+    </div>
+
+    <div class="nav-item" id="nav-analisis" onclick="switchPage('analisis')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+        </svg>
+      </span>
+      Analisis Pembayaran
     </div>
 
     <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
@@ -393,6 +403,95 @@
           <thead id="rekap-thead"></thead>
           <tbody id="rekap-tbody">
             <tr><td colspan="3" class="empty-state">Pilih bulan untuk melihat rekap.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: ANALISIS PEMBAYARAN ══ -->
+  <div id="page-analisis" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Analisis Pembayaran</div>
+        <div class="page-sub" style="margin:0">COD vs Transfer per CS</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="adash-drp-wrap">
+          <button class="adash-drp-trigger" id="anal-drp-trigger" onclick="analDrpToggle()">
+            📅 <span id="anal-drp-label">30 Hari Terakhir</span> <span style="color:var(--muted);font-size:11px">▾</span>
+          </button>
+          <div class="adash-drp-dropdown" id="anal-drp-dropdown">
+            <div class="adash-drp-presets">
+              <button class="adash-drp-preset" onclick="analDrpPreset(1,'Hari Ini',this)">Hari Ini</button>
+              <button class="adash-drp-preset" onclick="analDrpPresetYesterday(this)">Kemarin</button>
+              <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+              <button class="adash-drp-preset" onclick="analDrpPreset(7,'7 Hari Terakhir',this)">7 Hari Terakhir</button>
+              <button class="adash-drp-preset" onclick="analDrpPreset(14,'14 Hari Terakhir',this)">14 Hari Terakhir</button>
+              <button class="adash-drp-preset active" onclick="analDrpPreset(30,'30 Hari Terakhir',this)">30 Hari Terakhir</button>
+              <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+              <button class="adash-drp-preset" onclick="analDrpPresetThisMonth(this)">Bulan Ini</button>
+              <button class="adash-drp-preset" onclick="analDrpPresetLastMonth(this)">Bulan Lalu</button>
+            </div>
+            <div style="display:flex;flex-direction:column;flex:1">
+              <div class="adash-drp-cal" id="anal-drp-cal"></div>
+              <div class="adash-drp-footer">
+                <div class="adash-drp-footer-txt"><span id="anal-drp-sel-start">—</span> → <span id="anal-drp-sel-end">—</span></div>
+                <div style="display:flex;gap:6px">
+                  <button class="adash-drp-cancel" onclick="analDrpClose()">Batal</button>
+                  <button class="adash-drp-apply" onclick="analDrpApply()">Terapkan</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-secondary" onclick="loadAnalisis()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem">
+      <div class="admin-stat-card">
+        <div class="ast-label">Total Order</div>
+        <div class="ast-value s-total" id="anal-total">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">COD</div>
+        <div id="anal-cod" style="font-size:26px;font-weight:700;color:#3b82f6">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Transfer</div>
+        <div id="anal-tf" style="font-size:26px;font-weight:700;color:#22c55e">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">% Transfer</div>
+        <div id="anal-pct" style="font-size:26px;font-weight:700;color:var(--accent)">—</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="admin-stat-card" style="margin-bottom:1.25rem;padding:1.25rem">
+      <div style="font-size:13px;font-weight:600;margin-bottom:1rem;color:var(--text)">Tren Harian — COD vs Transfer</div>
+      <canvas id="anal-chart" height="80"></canvas>
+    </div>
+
+    <!-- Tabel per CS -->
+    <div class="table-wrap">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">Breakdown per CS</div>
+      <div class="table-scroll" style="max-height:calc(100vh - 560px)">
+        <table id="anal-table">
+          <thead>
+            <tr>
+              <th>Nama CS</th>
+              <th style="text-align:center">Total</th>
+              <th style="text-align:center;color:#3b82f6">COD</th>
+              <th style="text-align:center;color:#22c55e">Transfer</th>
+              <th style="text-align:center">% TF</th>
+              <th style="text-align:center">Bar</th>
+            </tr>
+          </thead>
+          <tbody id="anal-tbody">
+            <tr><td colspan="6" class="empty-state">Pilih rentang tanggal.</td></tr>
           </tbody>
         </table>
       </div>
@@ -870,12 +969,12 @@ function resetTemplate() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','dashboard','rekap','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
+  ['overview','dashboard','rekap','analisis','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') {
     // Init drp ke hari ini kalau belum pernah dipilih
@@ -887,6 +986,7 @@ function switchPage(name) {
     loadAdminDash();
   }
   if (name === 'rekap')       loadRekap();
+  if (name === 'analisis')    loadAnalisis();
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
   if (name === 'sku')         loadSku();
@@ -1244,6 +1344,262 @@ async function runRevalidasiIklan() {
   } finally {
     btn.disabled = false;
     btn.textContent = '🔄 Re-validasi Iklan';
+  }
+}
+
+// ══ ANALISIS PEMBAYARAN ═══════════════════════════════════════════════════════
+// Date range picker state (terpisah dari dashboard)
+let analDrpStart  = null;
+let analDrpEnd    = null;
+let analDrpViewY  = new Date().getFullYear();
+let analDrpViewM  = new Date().getMonth();
+let analFltStart  = null;
+let analFltEnd    = null;
+let analChart     = null;
+
+function analDrpFmt(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+}
+function analDrpToStr(d) { return d.toLocaleDateString('en-CA'); }
+function analDrpToggle() {
+  const dd = document.getElementById('anal-drp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    analDrpRender();
+    setTimeout(() => document.addEventListener('click', analDrpOutside), 0);
+  } else document.removeEventListener('click', analDrpOutside);
+}
+function analDrpClose() {
+  document.getElementById('anal-drp-dropdown').classList.remove('open');
+  document.removeEventListener('click', analDrpOutside);
+}
+function analDrpOutside(e) {
+  const dd = document.getElementById('anal-drp-dropdown');
+  const tr = document.getElementById('anal-drp-trigger');
+  if (dd && tr && !dd.contains(e.target) && !tr.contains(e.target)) analDrpClose();
+}
+function analDrpSetActive(btn) {
+  document.querySelectorAll('#anal-drp-dropdown .adash-drp-preset').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+function analDrpPreset(days, label, btn) {
+  const end = new Date(); end.setHours(0,0,0,0);
+  analDrpStart = new Date(end.getTime() - (days-1)*864e5);
+  analDrpEnd = end;
+  analDrpSetActive(btn); analDrpUpdateSel(); analDrpRender();
+}
+function analDrpPresetYesterday(btn) {
+  const d = new Date(Date.now()-864e5); d.setHours(0,0,0,0);
+  analDrpStart = new Date(d); analDrpEnd = new Date(d);
+  analDrpSetActive(btn); analDrpUpdateSel(); analDrpRender();
+}
+function analDrpPresetThisMonth(btn) {
+  const n = new Date();
+  analDrpStart = new Date(n.getFullYear(), n.getMonth(), 1);
+  analDrpEnd = new Date(); analDrpEnd.setHours(0,0,0,0);
+  analDrpSetActive(btn); analDrpUpdateSel(); analDrpRender();
+}
+function analDrpPresetLastMonth(btn) {
+  const n = new Date();
+  analDrpStart = new Date(n.getFullYear(), n.getMonth()-1, 1);
+  analDrpEnd = new Date(n.getFullYear(), n.getMonth(), 0);
+  analDrpSetActive(btn); analDrpUpdateSel(); analDrpRender();
+}
+function analDrpUpdateSel() {
+  document.getElementById('anal-drp-sel-start').textContent = analDrpFmt(analDrpStart);
+  document.getElementById('anal-drp-sel-end').textContent   = analDrpFmt(analDrpEnd);
+}
+function analDrpClickDay(y, m, d, ev) {
+  if (ev) ev.stopPropagation();
+  const clicked = new Date(y, m, d);
+  if (!analDrpStart || (analDrpStart && analDrpEnd)) {
+    analDrpStart = clicked; analDrpEnd = null;
+  } else {
+    if (clicked < analDrpStart) { analDrpEnd = analDrpStart; analDrpStart = clicked; }
+    else analDrpEnd = clicked;
+    analDrpSetActive(null);
+  }
+  analDrpUpdateSel(); analDrpRender();
+}
+function analDrpNav(dir) {
+  analDrpViewM += dir;
+  if (analDrpViewM > 11) { analDrpViewM = 0; analDrpViewY++; }
+  if (analDrpViewM < 0)  { analDrpViewM = 11; analDrpViewY--; }
+  analDrpRender();
+}
+function analDrpRender() {
+  const y = analDrpViewY, m = analDrpViewM;
+  const firstDay = new Date(y,m,1).getDay();
+  const startPad = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMo = new Date(y,m+1,0).getDate();
+  const prevDays = new Date(y,m,0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+  let html = `<div class="adash-drp-cal-hdr">
+    <button class="adash-drp-nav" onclick="analDrpNav(-1)">‹</button>
+    <div class="adash-drp-cal-title">${ADASH_MONTHS[m]} ${y}</div>
+    <button class="adash-drp-nav" onclick="analDrpNav(1)">›</button>
+  </div>
+  <div class="adash-drp-days-hdr">${ADASH_DAYS.map(d=>`<span>${d}</span>`).join('')}</div>
+  <div class="adash-drp-days">`;
+  for (let i=startPad;i>0;i--) html+=`<button class="adash-drp-day other-month" onclick="analDrpNav(-1)">${prevDays-i+1}</button>`;
+  for (let d=1;d<=daysInMo;d++) {
+    const cur=new Date(y,m,d);
+    const isToday=cur.getTime()===today.getTime();
+    const isStart=analDrpStart&&cur.getTime()===analDrpStart.getTime();
+    const isEnd=analDrpEnd&&cur.getTime()===analDrpEnd.getTime();
+    const inRange=analDrpStart&&analDrpEnd&&cur>analDrpStart&&cur<analDrpEnd;
+    let cls='adash-drp-day';
+    if(isStart&&isEnd)cls+=' selected';
+    else if(isStart)cls+=' range-start';
+    else if(isEnd)cls+=' range-end';
+    else if(inRange)cls+=' in-range';
+    if(isToday)cls+=' today';
+    html+=`<button class="${cls}" onclick="analDrpClickDay(${y},${m},${d},event)">${d}</button>`;
+  }
+  const rem=(startPad+daysInMo)%7===0?0:7-(startPad+daysInMo)%7;
+  for(let d=1;d<=rem;d++) html+=`<button class="adash-drp-day other-month" onclick="analDrpNav(1)">${d}</button>`;
+  html+='</div>';
+  document.getElementById('anal-drp-cal').innerHTML=html;
+}
+function analDrpApply() {
+  if (!analDrpStart) return;
+  const end = analDrpEnd || analDrpStart;
+  analFltStart = analDrpToStr(analDrpStart);
+  analFltEnd   = analDrpToStr(end);
+  const label = analFltStart === analFltEnd
+    ? analDrpFmt(analDrpStart)
+    : `${analDrpFmt(analDrpStart)} — ${analDrpFmt(end)}`;
+  document.getElementById('anal-drp-label').textContent = label;
+  analDrpClose();
+  loadAnalisis();
+}
+
+function isCOD(pembayaran) {
+  return (pembayaran || '').toUpperCase().startsWith('COD');
+}
+
+async function loadAnalisis() {
+  // Init default 30 hari kalau belum pernah set
+  if (!analFltStart) {
+    const end   = new Date(); end.setHours(0,0,0,0);
+    const start = new Date(end.getTime() - 29*864e5);
+    analDrpStart = start; analDrpEnd = end;
+    analFltStart = analDrpToStr(start);
+    analFltEnd   = analDrpToStr(end);
+  }
+
+  document.getElementById('anal-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Memuat...</td></tr>';
+  ['anal-total','anal-cod','anal-tf','anal-pct'].forEach(id => { document.getElementById(id).textContent = '—'; });
+
+  try {
+    const PAGE = 1000;
+    let allData = [], from = 0;
+    while (true) {
+      const { data: batch, error } = await sb.from('orderan_masuk')
+        .select('cs_nama,tanggal,pembayaran')
+        .gte('tanggal', analFltStart)
+        .lte('tanggal', analFltEnd)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      allData = allData.concat(batch || []);
+      if (!batch || batch.length < PAGE) break;
+      from += PAGE;
+    }
+
+    const total = allData.length;
+    const cod   = allData.filter(r => isCOD(r.pembayaran)).length;
+    const tf    = total - cod;
+    const pct   = total > 0 ? ((tf / total) * 100).toFixed(1) : 0;
+
+    document.getElementById('anal-total').textContent = total.toLocaleString('id');
+    document.getElementById('anal-cod').textContent   = cod.toLocaleString('id');
+    document.getElementById('anal-tf').textContent    = tf.toLocaleString('id');
+    document.getElementById('anal-pct').textContent   = pct + '%';
+
+    // Build daily chart data
+    const dateMap = {}; // { 'YYYY-MM-DD': { cod, tf } }
+    allData.forEach(r => {
+      const tgl = (r.tanggal || '').slice(0,10);
+      if (!dateMap[tgl]) dateMap[tgl] = { cod:0, tf:0 };
+      if (isCOD(r.pembayaran)) dateMap[tgl].cod++;
+      else dateMap[tgl].tf++;
+    });
+    const sortedDates = Object.keys(dateMap).sort();
+    const chartLabels = sortedDates.map(d => {
+      const dt = new Date(d);
+      return dt.toLocaleDateString('id-ID', { day:'numeric', month:'short' });
+    });
+    const codData = sortedDates.map(d => dateMap[d].cod);
+    const tfData  = sortedDates.map(d => dateMap[d].tf);
+
+    // Render chart
+    const ctx = document.getElementById('anal-chart').getContext('2d');
+    if (analChart) analChart.destroy();
+    const isDark = document.body.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    analChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          { label: 'COD', data: codData, backgroundColor: '#3b82f6', borderRadius: 4, borderSkipped: false },
+          { label: 'Transfer', data: tfData, backgroundColor: '#22c55e', borderRadius: 4, borderSkipped: false },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', labels: { color: textColor, boxWidth: 12, padding: 16, font: { size: 12 } } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, maxRotation: 45 } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Tabel per CS
+    const csMap = {};
+    allData.forEach(r => {
+      const cs = r.cs_nama || '—';
+      if (!csMap[cs]) csMap[cs] = { cod:0, tf:0 };
+      if (isCOD(r.pembayaran)) csMap[cs].cod++;
+      else csMap[cs].tf++;
+    });
+    const csRows = Object.entries(csMap)
+      .map(([nama, v]) => ({ nama, ...v, total: v.cod + v.tf, pct: v.total > 0 ? ((v.tf/(v.cod+v.tf))*100).toFixed(1) : 0 }))
+      .sort((a, b) => b.total - a.total);
+
+    if (!csRows.length) {
+      document.getElementById('anal-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Tidak ada data.</td></tr>';
+      return;
+    }
+
+    const maxTotal = csRows[0].total;
+    document.getElementById('anal-tbody').innerHTML = csRows.map(r => {
+      const barCod = maxTotal > 0 ? (r.cod / maxTotal * 100).toFixed(1) : 0;
+      const barTf  = maxTotal > 0 ? (r.tf  / maxTotal * 100).toFixed(1) : 0;
+      return `<tr>
+        <td style="font-weight:600">${r.nama}</td>
+        <td style="text-align:center;font-family:var(--mono);font-weight:700">${r.total}</td>
+        <td style="text-align:center;font-family:var(--mono);color:#3b82f6;font-weight:600">${r.cod}</td>
+        <td style="text-align:center;font-family:var(--mono);color:#22c55e;font-weight:600">${r.tf}</td>
+        <td style="text-align:center;font-weight:600;color:var(--accent)">${r.pct}%</td>
+        <td style="min-width:120px;padding:8px 12px">
+          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--bg)">
+            <div style="width:${barCod}%;background:#3b82f6;transition:width .3s"></div>
+            <div style="width:${barTf}%;background:#22c55e;transition:width .3s"></div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    showToast('Gagal load analisis: ' + e.message, 'error');
+    document.getElementById('anal-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Gagal memuat data.</td></tr>';
   }
 }
 
