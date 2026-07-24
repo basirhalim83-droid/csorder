@@ -103,6 +103,15 @@
       Analisis Pembayaran
     </div>
 
+    <div class="nav-item" id="nav-produk" onclick="switchPage('produk')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+      </span>
+      Analisis Produk
+    </div>
+
     <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
       <span class="nav-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -496,6 +505,100 @@
           </thead>
           <tbody id="anal-tbody">
             <tr><td colspan="6" class="empty-state">Pilih rentang tanggal.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: ANALISIS PRODUK ══ -->
+  <div id="page-produk" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Analisis Produk</div>
+        <div class="page-sub" style="margin:0">Upsell ratio & distribusi qty per CS</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="adash-drp-wrap">
+          <button class="adash-drp-trigger" id="prod-drp-trigger" onclick="prodDrpToggle()">
+            📅 <span id="prod-drp-label">30 Hari Terakhir</span> <span style="color:var(--muted);font-size:11px">▾</span>
+          </button>
+          <div class="adash-drp-dropdown" id="prod-drp-dropdown" style="right:0;left:auto">
+            <div class="adash-drp-presets">
+              <button class="adash-drp-preset" onclick="prodDrpPreset(1,'Hari Ini',this)">Hari Ini</button>
+              <button class="adash-drp-preset" onclick="prodDrpPresetYesterday(this)">Kemarin</button>
+              <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+              <button class="adash-drp-preset" onclick="prodDrpPreset(7,'7 Hari Terakhir',this)">7 Hari Terakhir</button>
+              <button class="adash-drp-preset" onclick="prodDrpPreset(14,'14 Hari Terakhir',this)">14 Hari Terakhir</button>
+              <button class="adash-drp-preset active" onclick="prodDrpPreset(30,'30 Hari Terakhir',this)">30 Hari Terakhir</button>
+              <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+              <button class="adash-drp-preset" onclick="prodDrpPresetThisMonth(this)">Bulan Ini</button>
+              <button class="adash-drp-preset" onclick="prodDrpPresetLastMonth(this)">Bulan Lalu</button>
+            </div>
+            <div style="display:flex;flex-direction:column;flex:1">
+              <div class="adash-drp-cal" id="prod-drp-cal"></div>
+              <div class="adash-drp-footer">
+                <div class="adash-drp-footer-txt"><span id="prod-drp-sel-start">—</span> → <span id="prod-drp-sel-end">—</span></div>
+                <div style="display:flex;gap:6px">
+                  <button class="adash-drp-cancel" onclick="prodDrpClose()">Batal</button>
+                  <button class="adash-drp-apply" onclick="prodDrpApply()">Terapkan</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <select id="prod-sku-filter" class="f-input" style="width:auto;min-width:180px" onchange="loadProduk()">
+          <option value="">Semua Produk</option>
+        </select>
+        <button class="btn-secondary" onclick="loadProduk()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem">
+      <div class="admin-stat-card">
+        <div class="ast-label">Total Order</div>
+        <div id="prod-total" class="ast-value s-total">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Total Botol</div>
+        <div id="prod-qty" style="font-size:26px;font-weight:700;color:#3b82f6">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Upsell Ratio</div>
+        <div id="prod-ratio" style="font-size:26px;font-weight:700;color:var(--accent)">—</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="ast-label">Order Upsell (>1 botol)</div>
+        <div id="prod-upsell-pct" style="font-size:26px;font-weight:700;color:#22c55e">—</div>
+      </div>
+    </div>
+
+    <!-- Chart tren harian -->
+    <div class="admin-stat-card" style="margin-bottom:1.25rem;padding:1.25rem">
+      <div style="font-size:13px;font-weight:600;margin-bottom:1rem">Tren Harian — Upsell Ratio & Total Botol</div>
+      <canvas id="prod-chart" height="80"></canvas>
+    </div>
+
+    <!-- Tabel per CS -->
+    <div class="table-wrap">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">Breakdown per CS</div>
+      <div class="table-scroll" style="max-height:calc(100vh - 560px)">
+        <table>
+          <thead>
+            <tr>
+              <th>Nama CS</th>
+              <th style="text-align:center">Order</th>
+              <th style="text-align:center;color:#3b82f6">Total Botol</th>
+              <th style="text-align:center;color:var(--accent)">Ratio</th>
+              <th style="text-align:center">HRB 1</th>
+              <th style="text-align:center">HRB 2</th>
+              <th style="text-align:center">HRB 3+</th>
+              <th style="text-align:center;color:#22c55e">% Upsell</th>
+            </tr>
+          </thead>
+          <tbody id="prod-tbody">
+            <tr><td colspan="8" class="empty-state">Pilih rentang tanggal.</td></tr>
           </tbody>
         </table>
       </div>
@@ -973,12 +1076,12 @@ function resetTemplate() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','dashboard','rekap','analisis','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
+  ['overview','dashboard','rekap','analisis','produk','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', produk:'Analisis Produk', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') {
     // Init drp ke hari ini kalau belum pernah dipilih
@@ -991,6 +1094,7 @@ function switchPage(name) {
   }
   if (name === 'rekap')       loadRekap();
   if (name === 'analisis')    loadAnalisis();
+  if (name === 'produk')      loadProduk();
   if (name === 'users')       loadUsers();
   if (name === 'fonnte')      loadFonnte();
   if (name === 'sku')         loadSku();
@@ -1618,6 +1722,197 @@ async function loadAnalisis() {
   } catch(e) {
     showToast('Gagal load analisis: ' + e.message, 'error');
     document.getElementById('anal-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Gagal memuat data.</td></tr>';
+  }
+}
+
+// ══ ANALISIS PRODUK ═══════════════════════════════════════════════════════════
+let prodDrpStart = null, prodDrpEnd = null;
+let prodDrpViewY = new Date().getFullYear(), prodDrpViewM = new Date().getMonth();
+let prodFltStart = null, prodFltEnd = null;
+let prodChart = null;
+
+// DRP helpers (same pattern)
+function prodDrpFmt(d) { return d ? d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—'; }
+function prodDrpToStr(d) { return d.toLocaleDateString('en-CA'); }
+function prodDrpToggle() {
+  const dd = document.getElementById('prod-drp-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) { prodDrpRender(); setTimeout(()=>document.addEventListener('click',prodDrpOutside),0); }
+  else document.removeEventListener('click',prodDrpOutside);
+}
+function prodDrpClose() { document.getElementById('prod-drp-dropdown').classList.remove('open'); document.removeEventListener('click',prodDrpOutside); }
+function prodDrpOutside(e) {
+  const dd=document.getElementById('prod-drp-dropdown'), tr=document.getElementById('prod-drp-trigger');
+  if(dd&&tr&&!dd.contains(e.target)&&!tr.contains(e.target)) prodDrpClose();
+}
+function prodDrpSetActive(btn) { document.querySelectorAll('#prod-drp-dropdown .adash-drp-preset').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active'); }
+function prodDrpPreset(days,label,btn) {
+  const end=new Date();end.setHours(0,0,0,0);
+  prodDrpStart=new Date(end.getTime()-(days-1)*864e5);prodDrpEnd=end;
+  prodDrpSetActive(btn);prodDrpUpdateSel();prodDrpRender();
+}
+function prodDrpPresetYesterday(btn) { const d=new Date(Date.now()-864e5);d.setHours(0,0,0,0);prodDrpStart=new Date(d);prodDrpEnd=new Date(d);prodDrpSetActive(btn);prodDrpUpdateSel();prodDrpRender(); }
+function prodDrpPresetThisMonth(btn) { const n=new Date();prodDrpStart=new Date(n.getFullYear(),n.getMonth(),1);prodDrpEnd=new Date();prodDrpEnd.setHours(0,0,0,0);prodDrpSetActive(btn);prodDrpUpdateSel();prodDrpRender(); }
+function prodDrpPresetLastMonth(btn) { const n=new Date();prodDrpStart=new Date(n.getFullYear(),n.getMonth()-1,1);prodDrpEnd=new Date(n.getFullYear(),n.getMonth(),0);prodDrpSetActive(btn);prodDrpUpdateSel();prodDrpRender(); }
+function prodDrpUpdateSel() { document.getElementById('prod-drp-sel-start').textContent=prodDrpFmt(prodDrpStart);document.getElementById('prod-drp-sel-end').textContent=prodDrpFmt(prodDrpEnd); }
+function prodDrpClickDay(y,m,d,ev) {
+  if(ev)ev.stopPropagation();
+  const clicked=new Date(y,m,d);
+  if(!prodDrpStart||(prodDrpStart&&prodDrpEnd)){prodDrpStart=clicked;prodDrpEnd=null;}
+  else{if(clicked<prodDrpStart){prodDrpEnd=prodDrpStart;prodDrpStart=clicked;}else prodDrpEnd=clicked;prodDrpSetActive(null);}
+  prodDrpUpdateSel();prodDrpRender();
+}
+function prodDrpNav(dir) {
+  prodDrpViewM+=dir;
+  if(prodDrpViewM>11){prodDrpViewM=0;prodDrpViewY++;}
+  if(prodDrpViewM<0){prodDrpViewM=11;prodDrpViewY--;}
+  prodDrpRender();
+}
+function prodDrpRender() {
+  const y=prodDrpViewY,m=prodDrpViewM;
+  const firstDay=new Date(y,m,1).getDay(),startPad=firstDay===0?6:firstDay-1;
+  const daysInMo=new Date(y,m+1,0).getDate(),prevDays=new Date(y,m,0).getDate();
+  const today=new Date();today.setHours(0,0,0,0);
+  let html=`<div class="adash-drp-cal-hdr"><button class="adash-drp-nav" onclick="prodDrpNav(-1)">‹</button><div class="adash-drp-cal-title">${ADASH_MONTHS[m]} ${y}</div><button class="adash-drp-nav" onclick="prodDrpNav(1)">›</button></div><div class="adash-drp-days-hdr">${ADASH_DAYS.map(d=>`<span>${d}</span>`).join('')}</div><div class="adash-drp-days">`;
+  for(let i=startPad;i>0;i--)html+=`<button class="adash-drp-day other-month" onclick="prodDrpNav(-1)">${prevDays-i+1}</button>`;
+  for(let d=1;d<=daysInMo;d++){
+    const cur=new Date(y,m,d),isToday=cur.getTime()===today.getTime();
+    const isStart=prodDrpStart&&cur.getTime()===prodDrpStart.getTime();
+    const isEnd=prodDrpEnd&&cur.getTime()===prodDrpEnd.getTime();
+    const inRange=prodDrpStart&&prodDrpEnd&&cur>prodDrpStart&&cur<prodDrpEnd;
+    let cls='adash-drp-day';
+    if(isStart&&isEnd)cls+=' selected';else if(isStart)cls+=' range-start';else if(isEnd)cls+=' range-end';else if(inRange)cls+=' in-range';
+    if(isToday)cls+=' today';
+    html+=`<button class="${cls}" onclick="prodDrpClickDay(${y},${m},${d},event)">${d}</button>`;
+  }
+  const rem=(startPad+daysInMo)%7===0?0:7-(startPad+daysInMo)%7;
+  for(let d=1;d<=rem;d++)html+=`<button class="adash-drp-day other-month" onclick="prodDrpNav(1)">${d}</button>`;
+  html+='</div>';
+  document.getElementById('prod-drp-cal').innerHTML=html;
+}
+function prodDrpApply() {
+  if(!prodDrpStart)return;
+  const end=prodDrpEnd||prodDrpStart;
+  prodFltStart=prodDrpToStr(prodDrpStart);prodFltEnd=prodDrpToStr(end);
+  const label=prodFltStart===prodFltEnd?prodDrpFmt(prodDrpStart):`${prodDrpFmt(prodDrpStart)} — ${prodDrpFmt(end)}`;
+  document.getElementById('prod-drp-label').textContent=label;
+  prodDrpClose();loadProduk();
+}
+
+async function loadProduk() {
+  if (!prodFltStart) {
+    const end=new Date();end.setHours(0,0,0,0);
+    const start=new Date(end.getTime()-29*864e5);
+    prodDrpStart=start;prodDrpEnd=end;
+    prodFltStart=prodDrpToStr(start);prodFltEnd=prodDrpToStr(end);
+  }
+
+  document.getElementById('prod-tbody').innerHTML='<tr><td colspan="8" class="empty-state">Memuat...</td></tr>';
+  ['prod-total','prod-qty','prod-ratio','prod-upsell-pct'].forEach(id=>{document.getElementById(id).textContent='—';});
+
+  try {
+    // Load SKU filter
+    const skuSel = document.getElementById('prod-sku-filter');
+    if (skuSel.options.length <= 1) {
+      const { data: skuList } = await sb.from('sku_produk').select('kode,nama_produk').order('nama_produk');
+      (skuList||[]).forEach(s => {
+        const opt=document.createElement('option');opt.value=s.kode;opt.textContent=s.nama_produk;skuSel.appendChild(opt);
+      });
+    }
+    const skuFilter = skuSel.value;
+
+    const PAGE=1000;let allData=[],from=0;
+    while(true){
+      let q=sb.from('orderan_masuk')
+        .select('cs_nama,tanggal,quantity,jumlah_pesanan')
+        .gte('tanggal',prodFltStart).lte('tanggal',prodFltEnd);
+      if(skuFilter) q=q.ilike('jumlah_pesanan',`%${skuFilter}%`);
+      const {data:batch,error}=await q.range(from,from+PAGE-1);
+      if(error)throw error;
+      allData=allData.concat(batch||[]);
+      if(!batch||batch.length<PAGE)break;
+      from+=PAGE;
+    }
+
+    const totalOrder = allData.length;
+    const totalQty   = allData.reduce((s,r)=>s+(parseInt(r.quantity)||1),0);
+    const ratio      = totalOrder>0?(totalQty/totalOrder).toFixed(2):0;
+    const upsellCnt  = allData.filter(r=>(parseInt(r.quantity)||1)>1).length;
+    const upsellPct  = totalOrder>0?((upsellCnt/totalOrder)*100).toFixed(1):0;
+
+    document.getElementById('prod-total').textContent    = totalOrder.toLocaleString('id');
+    document.getElementById('prod-qty').textContent      = totalQty.toLocaleString('id');
+    document.getElementById('prod-ratio').textContent    = ratio + 'x';
+    document.getElementById('prod-upsell-pct').textContent = upsellPct + '%';
+
+    // Chart tren harian
+    const dateMap={};
+    allData.forEach(r=>{
+      const tgl=(r.tanggal||'').slice(0,10);
+      if(!dateMap[tgl])dateMap[tgl]={orders:0,qty:0};
+      dateMap[tgl].orders++;
+      dateMap[tgl].qty+=(parseInt(r.quantity)||1);
+    });
+    const sortedDates=Object.keys(dateMap).sort();
+    const chartLabels=sortedDates.map(d=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}));
+    const ratioData=sortedDates.map(d=>dateMap[d].orders>0?(dateMap[d].qty/dateMap[d].orders).toFixed(2):0);
+    const qtyData=sortedDates.map(d=>dateMap[d].qty);
+
+    const ctx=document.getElementById('prod-chart').getContext('2d');
+    if(prodChart)prodChart.destroy();
+    const isDark=document.body.classList.contains('dark');
+    const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)';
+    const textColor=isDark?'#94a3b8':'#64748b';
+    prodChart=new Chart(ctx,{
+      data:{
+        labels:chartLabels,
+        datasets:[
+          {type:'bar',label:'Total Botol',data:qtyData,backgroundColor:'rgba(59,130,246,0.5)',borderColor:'#3b82f6',borderWidth:1,borderRadius:4,yAxisID:'y'},
+          {type:'line',label:'Upsell Ratio',data:ratioData,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.1)',borderWidth:2,pointRadius:3,tension:0.3,yAxisID:'y2'},
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{
+          legend:{position:'top',labels:{color:textColor,boxWidth:12,padding:16,font:{size:12}}},
+          tooltip:{mode:'index',intersect:false}
+        },
+        scales:{
+          x:{grid:{color:gridColor},ticks:{color:textColor,font:{size:11},maxRotation:45}},
+          y:{grid:{color:gridColor},ticks:{color:textColor,font:{size:11}},beginAtZero:true,title:{display:true,text:'Total Botol',color:textColor,font:{size:11}}},
+          y2:{position:'right',grid:{display:false},ticks:{color:'#f59e0b',font:{size:11}},title:{display:true,text:'Ratio',color:'#f59e0b',font:{size:11}},beginAtZero:true}
+        }
+      }
+    });
+
+    // Tabel per CS
+    const csMap={};
+    allData.forEach(r=>{
+      const cs=r.cs_nama||'—',qty=parseInt(r.quantity)||1;
+      if(!csMap[cs])csMap[cs]={orders:0,qty:0,hrb1:0,hrb2:0,hrb3p:0};
+      csMap[cs].orders++;csMap[cs].qty+=qty;
+      if(qty===1)csMap[cs].hrb1++;
+      else if(qty===2)csMap[cs].hrb2++;
+      else csMap[cs].hrb3p++;
+    });
+    const csRows=Object.entries(csMap)
+      .map(([nama,v])=>({nama,...v,ratio:(v.qty/v.orders).toFixed(2),upsellPct:((( v.hrb2+v.hrb3p)/v.orders)*100).toFixed(1)}))
+      .sort((a,b)=>parseFloat(b.ratio)-parseFloat(a.ratio));
+
+    document.getElementById('prod-tbody').innerHTML=csRows.map(r=>`<tr>
+      <td style="font-weight:600">${r.nama}</td>
+      <td style="text-align:center;font-family:var(--mono)">${r.orders}</td>
+      <td style="text-align:center;font-family:var(--mono);color:#3b82f6;font-weight:600">${r.qty}</td>
+      <td style="text-align:center;font-weight:700;color:var(--accent)">${r.ratio}x</td>
+      <td style="text-align:center;font-family:var(--mono);color:var(--muted)">${r.hrb1}</td>
+      <td style="text-align:center;font-family:var(--mono);color:#3b82f6">${r.hrb2}</td>
+      <td style="text-align:center;font-family:var(--mono);color:#22c55e">${r.hrb3p}</td>
+      <td style="text-align:center;font-weight:700;color:#22c55e">${r.upsellPct}%</td>
+    </tr>`).join('');
+
+  } catch(e) {
+    showToast('Gagal load analisis produk: '+e.message,'error');
+    document.getElementById('prod-tbody').innerHTML='<tr><td colspan="8" class="empty-state">Gagal memuat data.</td></tr>';
   }
 }
 
