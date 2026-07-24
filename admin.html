@@ -581,7 +581,7 @@
     </div>
 
     <!-- Tabel per CS -->
-    <div class="table-wrap">
+    <div class="table-wrap" style="margin-bottom:1.25rem">
       <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">Breakdown per CS</div>
       <div class="table-scroll" style="max-height:calc(100vh - 560px)">
         <table>
@@ -601,6 +601,50 @@
             <tr><td colspan="8" class="empty-state">Pilih rentang tanggal.</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Analisis Wilayah -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+      <!-- Top Provinsi -->
+      <div class="table-wrap">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">📍 Top Provinsi</div>
+        <div class="table-scroll" style="max-height:320px">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Provinsi</th>
+                <th style="text-align:center">Order</th>
+                <th style="text-align:center">Botol</th>
+                <th style="text-align:center">%</th>
+              </tr>
+            </thead>
+            <tbody id="prod-prov-tbody">
+              <tr><td colspan="5" class="empty-state">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Top Kabupaten/Kota -->
+      <div class="table-wrap">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">🏙️ Top Kabupaten / Kota</div>
+        <div class="table-scroll" style="max-height:320px">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Kabupaten / Kota</th>
+                <th style="text-align:center">Order</th>
+                <th style="text-align:center">Botol</th>
+                <th style="text-align:center">%</th>
+              </tr>
+            </thead>
+            <tbody id="prod-kab-tbody">
+              <tr><td colspan="5" class="empty-state">—</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1824,7 +1868,7 @@ async function loadProduk() {
     const PAGE=1000;let allData=[],from=0;
     while(true){
       let q=sb.from('orderan_masuk')
-        .select('cs_nama,tanggal,quantity')
+        .select('cs_nama,tanggal,quantity,provinsi,kabupaten')
         .gte('tanggal',prodFltStart).lte('tanggal',prodFltEnd);
       if(skuFilter) q=q.ilike('nama',`%|${skuFilter}%`);
       const {data:batch,error}=await q.range(from,from+PAGE-1);
@@ -1924,6 +1968,46 @@ async function loadProduk() {
       <td style="text-align:center;font-family:var(--mono);color:#22c55e">${r.q3p}</td>
       <td style="text-align:center;font-weight:700;color:#22c55e">${r.upsellPct}%</td>
     </tr>`).join('');
+
+    // ── Analisis Wilayah ──────────────────────────────────────────────────────
+    function buildWilayahRows(key) {
+      const map={};
+      allData.forEach(r=>{
+        const label=(r[key]||'').trim()||'—';
+        if(!map[label])map[label]={orders:0,qty:0};
+        map[label].orders++;
+        map[label].qty+=(parseInt(r.quantity)||1);
+      });
+      return Object.entries(map)
+        .map(([nama,v])=>({nama,...v}))
+        .sort((a,b)=>b.orders-a.orders)
+        .slice(0,15);
+    }
+
+    function renderWilayahTbl(tbodyId, rows) {
+      const total=allData.length||1;
+      document.getElementById(tbodyId).innerHTML = rows.length
+        ? rows.map((r,i)=>{
+            const pct=((r.orders/total)*100).toFixed(1);
+            const barW=((r.orders/rows[0].orders)*100).toFixed(1);
+            return `<tr>
+              <td style="color:var(--muted);font-family:var(--mono);font-size:12px">${i+1}</td>
+              <td style="font-size:12px;font-weight:500">
+                ${r.nama}
+                <div style="margin-top:3px;height:4px;border-radius:2px;background:var(--border);width:100%">
+                  <div style="height:4px;border-radius:2px;background:var(--accent);width:${barW}%"></div>
+                </div>
+              </td>
+              <td style="text-align:center;font-family:var(--mono);font-weight:700">${r.orders}</td>
+              <td style="text-align:center;font-family:var(--mono);color:#3b82f6">${r.qty}</td>
+              <td style="text-align:center;font-size:12px;color:var(--muted)">${pct}%</td>
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="5" class="empty-state">Tidak ada data.</td></tr>`;
+    }
+
+    renderWilayahTbl('prod-prov-tbody', buildWilayahRows('provinsi'));
+    renderWilayahTbl('prod-kab-tbody',  buildWilayahRows('kabupaten'));
 
   } catch(e) {
     showToast('Gagal load analisis produk: '+e.message,'error');
