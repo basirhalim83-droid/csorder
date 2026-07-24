@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<style>
+  #page-rekap.active { display:flex !important; flex-direction:column; height:calc(100vh - 52px); overflow:hidden; }
+  #page-rekap .table-wrap { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  #page-rekap .table-wrap .table-scroll { flex:1; overflow:auto; max-height:none; }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/auth.js"></script>
 </head>
@@ -281,7 +286,7 @@
   </div>
 
   <!-- ══ PAGE: REKAP CS ══ -->
-  <div id="page-rekap" class="page">
+  <div id="page-rekap" class="page" style="display:flex;flex-direction:column;height:100%">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
       <div>
         <div class="page-title" style="margin-bottom:2px">Rekap CS</div>
@@ -294,6 +299,26 @@
       </div>
     </div>
 
+    <!-- Stats cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1rem">
+      <div id="rekap-card-input" onclick="rekapSetFilter('input')" style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Total Input</div>
+        <div id="rekap-stat-input" style="font-size:24px;font-weight:700;color:var(--text)">—</div>
+      </div>
+      <div id="rekap-card-kirim" onclick="rekapSetFilter('kirim')" style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Kirim</div>
+        <div id="rekap-stat-kirim" style="font-size:24px;font-weight:700;color:#22c55e">—</div>
+      </div>
+      <div id="rekap-card-hold" onclick="rekapSetFilter('hold')" style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Hold</div>
+        <div id="rekap-stat-hold" style="font-size:24px;font-weight:700;color:#f59e0b">—</div>
+      </div>
+      <div id="rekap-card-cancel" onclick="rekapSetFilter('cancel')" style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Cancel</div>
+        <div id="rekap-stat-cancel" style="font-size:24px;font-weight:700;color:#ef4444">—</div>
+      </div>
+    </div>
+
     <!-- Filter pills -->
     <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
       <button id="rekap-pill-input"  onclick="rekapSetFilter('input')"  class="rekap-pill rekap-pill-active" style="padding:5px 14px;border-radius:99px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Total Input</button>
@@ -303,8 +328,8 @@
     </div>
 
     <!-- Tabel -->
-    <div class="table-wrap">
-      <div class="table-scroll" style="max-height:calc(100vh - 260px);overflow-x:auto">
+    <div class="table-wrap" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="table-scroll" style="flex:1;overflow:auto">
         <table id="rekap-table">
           <thead id="rekap-thead"></thead>
           <tbody id="rekap-tbody">
@@ -2056,18 +2081,26 @@ const HARI_ID     = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
 
 function rekapSetFilter(f) {
   rekapFilter = f;
+  // Pills
   ['input','kirim','hold','cancel'].forEach(k => {
     const el = document.getElementById('rekap-pill-' + k);
     if (!el) return;
     if (k === f) {
-      el.style.background = 'var(--accent)';
-      el.style.color      = '#fff';
+      el.style.background  = 'var(--accent)';
+      el.style.color       = '#fff';
       el.style.borderColor = 'var(--accent)';
     } else {
       el.style.background  = 'var(--card)';
       el.style.color       = 'var(--text)';
       el.style.borderColor = 'var(--border)';
     }
+  });
+  // Cards highlight
+  ['input','kirim','hold','cancel'].forEach(k => {
+    const card = document.getElementById('rekap-card-' + k);
+    if (!card) return;
+    card.style.borderColor = k === f ? 'var(--accent)' : 'var(--border)';
+    card.style.boxShadow   = k === f ? '0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)' : '';
   });
   rekapRender();
 }
@@ -2113,6 +2146,16 @@ function rekapRender() {
   if (!monthEl.value) return;
   const [year, month] = monthEl.value.split('-').map(Number);
   const lastDay = new Date(year, month, 0).getDate();
+
+  // Update stats cards (selalu dari rekapRawData penuh, bukan filtered)
+  const totalInput  = rekapRawData.length;
+  const totalKirim  = rekapRawData.filter(r => r.acc_spv === 'KIRIM').length;
+  const totalHold   = rekapRawData.filter(r => r.acc_spv === 'HOLD').length;
+  const totalCancel = rekapRawData.filter(r => r.acc_spv === 'CANCEL').length;
+  const si = document.getElementById('rekap-stat-input');  if (si) si.textContent = totalInput.toLocaleString('id');
+  const sk = document.getElementById('rekap-stat-kirim');  if (sk) sk.textContent = totalKirim.toLocaleString('id');
+  const sh = document.getElementById('rekap-stat-hold');   if (sh) sh.textContent = totalHold.toLocaleString('id');
+  const sc = document.getElementById('rekap-stat-cancel'); if (sc) sc.textContent = totalCancel.toLocaleString('id');
 
   // Filter data sesuai pill
   const filtered = rekapRawData.filter(r => {
