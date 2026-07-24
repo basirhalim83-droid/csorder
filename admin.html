@@ -896,10 +896,15 @@ async function runGmailPoll() {
       if (!d.ok) throw new Error(d.error || 'Gagal');
 
       const roundSaved = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.saved || 0), 0);
+      const roundFound = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.emails_found || 0), 0);
+      const roundNew   = (d.results || []).filter(r => !r.skipped).reduce((s, r) => s + (r.emails_new || 0), 0);
       totalSaved     += roundSaved;
       totalProcessed += (d.processed || 0);
 
-      statusEl.textContent = `Putaran ${round} selesai (${d.duration_ms}ms) · ${totalSaved} email tersimpan · ${d.skipped || 0} CS tersisa...`;
+      // Log detail ke console untuk debug
+      console.log(`[Gmail] Round ${round}:`, d.results);
+
+      statusEl.textContent = `Putaran ${round} · ditemukan: ${roundFound} · baru: ${roundNew} · tersimpan: ${roundSaved} · sisa: ${d.skipped || 0} CS`;
 
       // Kalau sudah tidak ada yang diskip → semua CS sudah diproses
       if (!d.skipped || d.skipped === 0) break;
