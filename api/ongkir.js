@@ -66,7 +66,22 @@ module.exports = async function handler(req, res) {
         { headers: { Accept: 'application/json' } }
       );
       const searchJson = await searchR.json();
-      dest = searchJson?.data?.[0];
+      const candidates = searchJson?.data || [];
+      if (!candidates.length) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
+
+      // Kalau ada kecamatan+kabupaten dikirim → cocokkan untuk presisi lebih tinggi
+      const kecQ = (req.query.kecamatan || '').toLowerCase().trim();
+      const kabQ = (req.query.kabupaten || '').toLowerCase().trim();
+      if (kecQ && kabQ) {
+        dest = candidates.find(d =>
+          d.DISTRICT_NAME?.toLowerCase() === kecQ &&
+          d.CITY_NAME?.toLowerCase() === kabQ
+        ) || candidates.find(d =>
+          d.CITY_NAME?.toLowerCase() === kabQ
+        ) || candidates[0];
+      } else {
+        dest = candidates[0];
+      }
       if (!dest) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
     }
 
