@@ -231,23 +231,23 @@
 
     <!-- Stats cards -->
     <div class="admin-stat-grid" style="margin-bottom:1rem">
-      <div class="admin-stat-card">
+      <div class="admin-stat-card" id="adash-card-all" onclick="adashSetStatus('')" style="cursor:pointer" title="Tampilkan semua">
         <div class="ast-label">Total</div>
         <div class="ast-value s-total" id="adash-total">—</div>
       </div>
-      <div class="admin-stat-card">
+      <div class="admin-stat-card" id="adash-card-tunggu" onclick="adashSetStatus('TUNGGU')" style="cursor:pointer" title="Filter Menunggu">
         <div class="ast-label">Menunggu</div>
         <div class="ast-value s-accent" id="adash-tunggu">—</div>
       </div>
-      <div class="admin-stat-card">
+      <div class="admin-stat-card" id="adash-card-kirim" onclick="adashSetStatus('KIRIM')" style="cursor:pointer" title="Filter Kirim">
         <div class="ast-label">Kirim</div>
         <div class="ast-value s-kirim" id="adash-kirim">—</div>
       </div>
-      <div class="admin-stat-card">
+      <div class="admin-stat-card" id="adash-card-hold" onclick="adashSetStatus('HOLD')" style="cursor:pointer" title="Filter Hold">
         <div class="ast-label">Hold</div>
         <div class="ast-value s-hold" id="adash-hold">—</div>
       </div>
-      <div class="admin-stat-card">
+      <div class="admin-stat-card" id="adash-card-cancel" onclick="adashSetStatus('CANCEL')" style="cursor:pointer" title="Filter Cancel">
         <div class="ast-label">Cancel</div>
         <div class="ast-value s-cancel" id="adash-cancel">—</div>
       </div>
@@ -1997,8 +1997,20 @@ function showToast(msg, type = 'info') {
 }
 
 // ══ ADMIN DASHBOARD ═══════════════════════════════════════════════════════════
-let adashAllData = [];
-let adashCsMap   = {};
+let adashAllData   = [];
+let adashCsMap     = {};
+let adashStatusFilter = ''; // '' = semua, 'KIRIM', 'HOLD', 'CANCEL', 'TUNGGU'
+
+function adashSetStatus(status) {
+  adashStatusFilter = status;
+  // Highlight card yang aktif
+  const cardMap = { '': 'all', 'TUNGGU': 'tunggu', 'KIRIM': 'kirim', 'HOLD': 'hold', 'CANCEL': 'cancel' };
+  Object.entries(cardMap).forEach(([s, key]) => {
+    const el = document.getElementById('adash-card-' + key);
+    if (el) el.style.outline = s === status ? '2px solid var(--accent)' : '';
+  });
+  adashRender();
+}
 
 function adashTodayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
@@ -2052,14 +2064,19 @@ function adashPopulateCsFilter(csList) {
 
 function adashRender() {
   const csFilter = document.getElementById('adash-cs-filter').value;
-  const rows = csFilter ? adashAllData.filter(r => r.cs_id === csFilter) : adashAllData;
+  const baseRows = csFilter ? adashAllData.filter(r => r.cs_id === csFilter) : adashAllData;
 
-  // Stats
-  document.getElementById('adash-total').textContent  = rows.length;
-  document.getElementById('adash-tunggu').textContent = rows.filter(r => !r.acc_spv).length;
-  document.getElementById('adash-kirim').textContent  = rows.filter(r => r.acc_spv === 'KIRIM').length;
-  document.getElementById('adash-hold').textContent   = rows.filter(r => r.acc_spv === 'HOLD').length;
-  document.getElementById('adash-cancel').textContent = rows.filter(r => r.acc_spv === 'CANCEL').length;
+  // Stats selalu dari baseRows (tanpa filter status)
+  document.getElementById('adash-total').textContent  = baseRows.length;
+  document.getElementById('adash-tunggu').textContent = baseRows.filter(r => !r.acc_spv).length;
+  document.getElementById('adash-kirim').textContent  = baseRows.filter(r => r.acc_spv === 'KIRIM').length;
+  document.getElementById('adash-hold').textContent   = baseRows.filter(r => r.acc_spv === 'HOLD').length;
+  document.getElementById('adash-cancel').textContent = baseRows.filter(r => r.acc_spv === 'CANCEL').length;
+
+  // Terapkan filter status untuk tabel
+  const rows = adashStatusFilter === ''       ? baseRows
+    : adashStatusFilter === 'TUNGGU'          ? baseRows.filter(r => !r.acc_spv)
+    : baseRows.filter(r => r.acc_spv === adashStatusFilter);
 
   const tbody = document.getElementById('adash-tbody');
   if (!rows.length) {
