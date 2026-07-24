@@ -89,6 +89,15 @@
       Rekap CS
     </div>
 
+    <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </span>
+      Tracking Resi
+    </div>
+
     <div class="nav-item" id="nav-users" onclick="switchPage('users')">
       <span class="nav-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -118,15 +127,6 @@
         </svg>
       </span>
       SKU Produk
-    </div>
-
-    <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
-      <span class="nav-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 12h14M12 5l7 7-7 7"/>
-        </svg>
-      </span>
-      Tracking Order
     </div>
 
     <div class="nav-item" id="nav-template" onclick="switchPage('template')">
@@ -335,13 +335,14 @@
               <th>Jumlah Pesanan</th>
               <th>Pembayaran</th>
               <th>Total</th>
-              <th>Validasi</th>
-              <th>ACC SPV</th>
+              <th style="min-width:160px">Validasi</th>
+              <th>Grade</th>
+              <th>Status</th>
               <th>Noted</th>
             </tr>
           </thead>
           <tbody id="adash-tbody">
-            <tr><td colspan="11" class="empty-state">Pilih tanggal dan klik Refresh.</td></tr>
+            <tr><td colspan="12" class="empty-state">Pilih tanggal dan klik Refresh.</td></tr>
           </tbody>
         </table>
       </div>
@@ -2555,7 +2556,7 @@ async function loadAdminDash() {
   const dateEnd   = adashDrpFltEnd   || dateStart;
 
   const tbody = document.getElementById('adash-tbody');
-  tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Memuat...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Memuat...</td></tr>';
 
   // Reset stats
   ['adash-total','adash-tunggu','adash-kirim','adash-hold','adash-cancel'].forEach(id => {
@@ -2593,7 +2594,7 @@ async function loadAdminDash() {
     adashRender();
   } catch(e) {
     showToast('Gagal load dashboard: ' + e.message, 'error');
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Gagal memuat data.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Gagal memuat data.</td></tr>';
   }
 }
 
@@ -2623,7 +2624,7 @@ function adashRender() {
 
   const tbody = document.getElementById('adash-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Belum ada orderan.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Belum ada orderan.</td></tr>';
     return;
   }
 
