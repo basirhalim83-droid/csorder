@@ -72,7 +72,7 @@ async function getAccessToken(refreshToken) {
 // ── Gmail API helpers ─────────────────────────────────────
 async function searchEmails(accessToken) {
   // Selalu ambil 7 hari ke belakang is:read — dedup via gmail_msg_id di DB
-  const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) newer_than:7d is:read');
+  const q = encodeURIComponent('(from:support@orderonline.id OR from:no-reply@loops.id) newer_than:7d');
   const r = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=50`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -285,7 +285,7 @@ module.exports = async function handler(req, res) {
         // Cek mana message ID yang sudah tersimpan di gmail_leads → skip fetch body-nya
         const allIds = allMessages.map(m => m.id);
         const existingRows = await sbGet('gmail_leads',
-          `?cs_id=eq.${cs.id}&gmail_msg_id=in.(${allIds.map(id => `"${id}"`).join(',')})&select=gmail_msg_id`
+          `?cs_id=eq.${cs.id}&gmail_msg_id=in.(${allIds.join(',')})&select=gmail_msg_id`
         ).catch(() => []);
         const existingIds = new Set((existingRows || []).map(r => r.gmail_msg_id));
         const messages = allMessages.filter(m => !existingIds.has(m.id));
