@@ -1891,18 +1891,33 @@ async function loadProduk() {
       }
     });
 
+    // Deteksi top-3 nilai qty terbanyak dari semua data → jadi kolom dinamis
+    const qtyCounts={};
+    allData.forEach(r=>{ const q=parseInt(r.quantity)||1; qtyCounts[q]=(qtyCounts[q]||0)+1; });
+    const sortedQtyKeys=Object.keys(qtyCounts).map(Number).sort((a,b)=>qtyCounts[b]-qtyCounts[a]);
+    // Ambil 2 qty teratas; sisanya masuk bucket "X+"
+    const topQ1=sortedQtyKeys[0]??1;
+    const topQ2=sortedQtyKeys[1]??null;
+    const lastLabel= topQ2!=null ? `${Math.max(topQ1,topQ2)+1}+` : `${topQ1+1}+`;
+
+    // Update header kolom qty
+    const qLabel = skuFilter || 'Qty';
+    document.getElementById('prod-th-q1').textContent = qLabel+' '+topQ1;
+    document.getElementById('prod-th-q2').textContent = topQ2!=null ? qLabel+' '+topQ2 : '—';
+    document.getElementById('prod-th-q3').textContent = qLabel+' '+lastLabel;
+
     // Tabel per CS
     const csMap={};
     allData.forEach(r=>{
       const cs=r.cs_nama||'—',qty=parseInt(r.quantity)||1;
-      if(!csMap[cs])csMap[cs]={orders:0,qty:0,hrb1:0,hrb2:0,hrb3p:0};
+      if(!csMap[cs])csMap[cs]={orders:0,qty:0,q1:0,q2:0,q3p:0};
       csMap[cs].orders++;csMap[cs].qty+=qty;
-      if(qty===1)csMap[cs].hrb1++;
-      else if(qty===2)csMap[cs].hrb2++;
-      else csMap[cs].hrb3p++;
+      if(qty===topQ1)csMap[cs].q1++;
+      else if(topQ2!=null&&qty===topQ2)csMap[cs].q2++;
+      else csMap[cs].q3p++;
     });
     const csRows=Object.entries(csMap)
-      .map(([nama,v])=>({nama,...v,ratio:(v.qty/v.orders).toFixed(2),upsellPct:((( v.hrb2+v.hrb3p)/v.orders)*100).toFixed(1)}))
+      .map(([nama,v])=>({nama,...v,ratio:(v.qty/v.orders).toFixed(2),upsellPct:(((v.orders-v.q1)/v.orders)*100).toFixed(1)}))
       .sort((a,b)=>parseFloat(b.ratio)-parseFloat(a.ratio));
 
     document.getElementById('prod-tbody').innerHTML=csRows.map(r=>`<tr>
@@ -1910,9 +1925,9 @@ async function loadProduk() {
       <td style="text-align:center;font-family:var(--mono)">${r.orders}</td>
       <td style="text-align:center;font-family:var(--mono);color:#3b82f6;font-weight:600">${r.qty}</td>
       <td style="text-align:center;font-weight:700;color:var(--accent)">${r.ratio}x</td>
-      <td style="text-align:center;font-family:var(--mono);color:var(--muted)">${r.hrb1}</td>
-      <td style="text-align:center;font-family:var(--mono);color:#3b82f6">${r.hrb2}</td>
-      <td style="text-align:center;font-family:var(--mono);color:#22c55e">${r.hrb3p}</td>
+      <td style="text-align:center;font-family:var(--mono);color:var(--muted)">${r.q1}</td>
+      <td style="text-align:center;font-family:var(--mono);color:#3b82f6">${topQ2!=null?r.q2:'—'}</td>
+      <td style="text-align:center;font-family:var(--mono);color:#22c55e">${r.q3p}</td>
       <td style="text-align:center;font-weight:700;color:#22c55e">${r.upsellPct}%</td>
     </tr>`).join('');
 
