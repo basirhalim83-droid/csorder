@@ -69,19 +69,27 @@ module.exports = async function handler(req, res) {
       const candidates = searchJson?.data || [];
       if (!candidates.length) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
 
-      // Kalau ada kecamatan+kabupaten dikirim → cocokkan untuk presisi lebih tinggi
+      // Cocokkan presisi: kelurahan+kecamatan+kabupaten dulu (1 kodepos/kecamatan bisa
+      // nyakup beberapa kelurahan beda tarif), baru fallback makin longgar.
+      const kelQ = (req.query.kelurahan || '').toLowerCase().trim();
       const kecQ = (req.query.kecamatan || '').toLowerCase().trim();
       const kabQ = (req.query.kabupaten || '').toLowerCase().trim();
-      if (kecQ && kabQ) {
+      if (kelQ && kecQ && kabQ) {
+        dest = candidates.find(d =>
+          d.SUBDISTRICT_NAME?.toLowerCase() === kelQ &&
+          d.DISTRICT_NAME?.toLowerCase()   === kecQ &&
+          d.CITY_NAME?.toLowerCase()       === kabQ
+        );
+      }
+      if (!dest && kecQ && kabQ) {
         dest = candidates.find(d =>
           d.DISTRICT_NAME?.toLowerCase() === kecQ &&
           d.CITY_NAME?.toLowerCase() === kabQ
         ) || candidates.find(d =>
           d.CITY_NAME?.toLowerCase() === kabQ
-        ) || candidates[0];
-      } else {
-        dest = candidates[0];
+        );
       }
+      if (!dest) dest = candidates[0];
       if (!dest) return res.status(200).json({ ok: false, reason: 'Alamat tujuan tidak ditemukan' });
     }
 
