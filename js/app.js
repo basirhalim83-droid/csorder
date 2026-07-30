@@ -2649,6 +2649,36 @@ async function trFetchTrackingRows(masukList, range) {
     return hpTanggalMap[normalizeHP(r.hp)]?.has(tgl);
   });
 
+  // 3.5: Isi resi yang kosong — cari di all_orderan by HP+tanggal (any sumber)
+  const emptyResiRows = filtered.filter(r => !r.resi);
+  if (emptyResiRows.length) {
+    const emptyHpSet = new Set();
+    emptyResiRows.forEach(r => {
+      const hp = String(r.hp || '');
+      emptyHpSet.add(hp);
+      emptyHpSet.add(hp.replace(/^0+/, ''));
+      if (!hp.startsWith('0')) emptyHpSet.add('0' + hp);
+    });
+    const { data: resiLookup } = await sb.from('all_orderan')
+      .select('hp, tanggal, resi')
+      .in('hp', [...emptyHpSet])
+      .not('resi', 'is', null)
+      .neq('resi', '')
+      .gte('tanggal', range?.start || '')
+      .lte('tanggal', range?.end || '9999-12-31');
+    const resiByHpTgl = {};
+    (resiLookup || []).forEach(r => {
+      if (!r.resi) return;
+      const key = normalizeHP(String(r.hp || '')) + '_' + (r.tanggal || '').slice(0, 10);
+      if (!resiByHpTgl[key]) resiByHpTgl[key] = r.resi;
+    });
+    filtered.forEach(r => {
+      if (r.resi) return;
+      const key = normalizeHP(String(r.hp || '')) + '_' + (r.tanggal || '').slice(0, 10);
+      if (resiByHpTgl[key]) r.resi = resiByHpTgl[key];
+    });
+  }
+
   // 4. Merge status tracking dari cs_order_tracking, keyed by resi
   const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
   let trkByResi = {};
