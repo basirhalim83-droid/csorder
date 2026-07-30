@@ -3026,7 +3026,7 @@ async function trRefreshAll() {
   try {
     const targets = trkAllData.filter(r => r.resi && r.status_resi !== 'SAMPAI' && r.status_resi !== 'RETUR');
     if (!targets.length) { showToast('Tidak ada resi yang perlu dicek.', 'info'); return; }
-    const BATCH = 15;
+    const BATCH = 20;
     let done = 0;
     for (let i = 0; i < targets.length; i += BATCH) {
       const batch = targets.slice(i, i + BATCH);
