@@ -2794,14 +2794,17 @@ async function loadTracking() {
       });
     }
 
-    // Step 4: Fetch tracking cache (cs_order_tracking) untuk semua resi sekaligus
+    // Step 4: Fetch tracking cache (cs_order_tracking) — batch per 500 agar tidak over URL limit
     const resiList = [...new Set(rows.map(r => (r.resi || '').trim()).filter(Boolean))];
     let trkByResi = {};
     if (resiList.length) {
-      const { data: trkData } = await sb.from('cs_order_tracking')
-        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
-        .in('resi', resiList);
-      (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+      const RESI_CHUNK = 500;
+      for (let i = 0; i < resiList.length; i += RESI_CHUNK) {
+        const { data: trkData } = await sb.from('cs_order_tracking')
+          .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+          .in('resi', resiList.slice(i, i + RESI_CHUNK));
+        (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+      }
     }
     rows.forEach(r => {
       const t = r.resi ? trkByResi[r.resi.trim()] : null;
