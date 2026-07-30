@@ -3016,12 +3016,33 @@ function showTrkAlerts(list) {
   const wrap = document.getElementById('trk-alerts');
   if (!wrap) return;
   const alerts = [];
+
+  // Alert: paket bermasalah
   const undellCount = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
   if (undellCount > 0) alerts.push(`<div class="trk-alert trk-alert-warn">⚠️ <strong>${undellCount} paket</strong> berstatus Bermasalah — segera hubungi customer.</div>`);
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-  const oldProses = list.filter(r => trCardState(trEffectiveStage(r)) === 'proses' && r.tanggal && r.tanggal < cutoffStr).length;
+
+  // Alert: on proses > 7 hari
+  const cutoff7 = new Date(); cutoff7.setDate(cutoff7.getDate() - 7);
+  const cutoff7Str = cutoff7.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const oldProses = list.filter(r => trCardState(trEffectiveStage(r)) === 'proses' && r.tanggal && r.tanggal < cutoff7Str).length;
   if (oldProses > 0) alerts.push(`<div class="trk-alert trk-alert-info">🕐 <strong>${oldProses} paket</strong> masih On Proses lebih dari 7 hari.</div>`);
+
+  // Alert: sudah lapor ekspedisi tapi masih BERMASALAH > 2 hari
+  const cutoff2d = new Date(Date.now() - 2 * 86400000);
+  const tidakBergerak = list.filter(r =>
+    trEffectiveStage(r) === 'BERMASALAH' &&
+    r.followup?.lapor_ekspedisi &&
+    r.followup?.updated_at &&
+    new Date(r.followup.updated_at) < cutoff2d
+  );
+  if (tidakBergerak.length > 0) {
+    alerts.push(`<div class="trk-alert" style="background:#fdf4ff;border:1px solid #a855f7;color:#7c3aed;cursor:pointer;align-items:center;justify-content:space-between"
+      onclick="trSetFilter('BERMASALAH');trSetFollowupFilter('lapor_ekspedisi')">
+      <span>🚨 <strong>${tidakBergerak.length} paket</strong> sudah lapor ekspedisi lebih dari 2 hari tapi masih <strong>Undell</strong> — perlu eskalasi ulang.</span>
+      <span style="font-size:11px;text-decoration:underline;white-space:nowrap;margin-left:12px;flex-shrink:0">Lihat →</span>
+    </div>`);
+  }
+
   wrap.innerHTML = alerts.join('');
 }
 
