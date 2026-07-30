@@ -2141,13 +2141,17 @@ function renderUsersTable(users, countMap) {
       ? new Date(u.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
       : '—';
 
-    const roleBadge = isAdmin
+    const roleBadge = u.role === 'admin'
       ? '<span class="badge-role admin">Admin</span>'
-      : '<span class="badge-role cs">CS</span>';
+      : u.role === 'retur'
+        ? '<span class="badge-role" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24">Tim Retur</span>'
+        : '<span class="badge-role cs">CS</span>';
 
-    const roleBtn = isAdmin
-      ? `<button class="btn-sm btn-sm-warn" onclick="toggleRole('${u.id}','admin')">Jadikan CS</button>`
-      : `<button class="btn-sm btn-sm-accent" onclick="toggleRole('${u.id}','cs')">Jadikan Admin</button>`;
+    const roleBtn = `<select class="trk-select" style="font-size:11px;padding:4px 7px" onchange="changeRole('${u.id}',this.value)">
+      <option value="cs"    ${u.role==='cs'    ?'selected':''}>CS</option>
+      <option value="retur" ${u.role==='retur' ?'selected':''}>Tim Retur</option>
+      <option value="admin" ${u.role==='admin' ?'selected':''}>Admin</option>
+    </select>`;
 
     let gmailBadge;
     if (u.gmail_email && u.gmail_refresh_token) {
@@ -2195,11 +2199,13 @@ function filterUsers() {
   renderUsersTable(filtered, null);
 }
 
-async function toggleRole(userId, currentRole) {
-  const newRole = currentRole === 'admin' ? 'cs' : 'admin';
-  const label   = newRole === 'admin' ? 'Admin' : 'CS biasa';
-  if (!confirm(`Ubah role user ini menjadi ${label}?`)) return;
-
+async function changeRole(userId, newRole) {
+  const labelMap = { admin: 'Admin', cs: 'CS', retur: 'Tim Retur' };
+  const label = labelMap[newRole] || newRole;
+  if (!confirm(`Ubah role user ini menjadi ${label}?`)) {
+    await loadUsers(); // reset dropdown ke nilai lama
+    return;
+  }
   try {
     const { error } = await sb.from('cs_profiles')
       .update({ role: newRole })
@@ -2209,6 +2215,7 @@ async function toggleRole(userId, currentRole) {
     await loadUsers();
   } catch(e) {
     showToast('Gagal ubah role: ' + e.message, 'error');
+    await loadUsers(); // reset dropdown
   }
 }
 
@@ -2651,7 +2658,9 @@ function renderTrkTabs() {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
-let trkAllData = [];
+let trkAllData      = [];
+let trkFilteredCache = [];
+let trkRenderLimit  = 100;
 
 // Dipakai oleh app.html (per cs_id). Admin pakai loadTracking() sendiri yang lebih efisien.
 async function trFetchTrackingRows(masukList, range) {
@@ -2856,12 +2865,19 @@ function applyTrkFilter() {
     (r.resi    || '').toLowerCase().includes(search) ||
     (r.cs_nama || '').toLowerCase().includes(search)
   );
+  trkFilteredCache = filtered;
+  trkRenderLimit   = 100;
   renderTrkCards(filtered);
   updateTrkCards(filtered);
   const info = filtered.length < trkAllData.length
     ? `${filtered.length} dari ${trkAllData.length} data`
     : `${trkAllData.length} data`;
   document.getElementById('trk-info').textContent = info;
+}
+
+function trLoadMore() {
+  trkRenderLimit += 100;
+  renderTrkCards(trkFilteredCache);
 }
 
 function trBadgeHtml(row) {
@@ -2920,7 +2936,9 @@ function renderTrkCards(list) {
     wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data yang cocok.</div>';
     return;
   }
-  wrap.innerHTML = list.map(r => {
+  const visible = list.slice(0, trkRenderLimit);
+  const hasMore = list.length > trkRenderLimit;
+  wrap.innerHTML = visible.map(r => {
     const eks     = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
     const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
     const cat     = trCardState(trEffectiveStage(r));
@@ -2950,7 +2968,13 @@ function renderTrkCards(list) {
         <div style="display:flex;gap:6px;align-items:center">${waBtnHtml}${trBadgeHtml(r)}</div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + (hasMore
+    ? `<div style="grid-column:1/-1;text-align:center;padding:1rem">
+        <button class="btn-secondary" onclick="trLoadMore()" style="font-size:13px;padding:9px 24px">
+          Muat lebih banyak (${list.length - trkRenderLimit} tersisa)
+        </button>
+      </div>`
+    : '');
 }
 
 let trModalResi = null;

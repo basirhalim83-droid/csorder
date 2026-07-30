@@ -207,8 +207,8 @@ let currentProfile = null;
 
   currentProfile = await getProfile(currentUser.id);
 
-  // Hanya admin yang boleh akses
-  if (!currentProfile || currentProfile.role !== 'admin') {
+  // Hanya admin dan team retur yang boleh akses
+  if (!currentProfile || !['admin','retur'].includes(currentProfile.role)) {
     window.location.href = 'app.html';
     return;
   }
@@ -609,7 +609,9 @@ function renderTrkTabs() {
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────────
-let trkAllData = [];
+let trkAllData       = [];
+let trkFilteredCache = [];
+let trkRenderLimit   = 100;
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -767,12 +769,19 @@ function applyTrkFilter() {
     (r.resi    || '').toLowerCase().includes(search) ||
     (r.cs_nama || '').toLowerCase().includes(search)
   );
+  trkFilteredCache = filtered;
+  trkRenderLimit   = 100;
   renderTrkCards(filtered);
   updateTrkCards(filtered);
   const info = filtered.length < trkAllData.length
     ? `${filtered.length} dari ${trkAllData.length} data`
     : `${trkAllData.length} data`;
   document.getElementById('trk-info').textContent = info;
+}
+
+function trLoadMore() {
+  trkRenderLimit += 100;
+  renderTrkCards(trkFilteredCache);
 }
 
 function trBadgeHtml(row) {
@@ -830,7 +839,9 @@ function renderTrkCards(list) {
     wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada data yang cocok.</div>';
     return;
   }
-  wrap.innerHTML = list.map(r => {
+  const visible = list.slice(0, trkRenderLimit);
+  const hasMore = list.length > trkRenderLimit;
+  wrap.innerHTML = visible.map(r => {
     const eks     = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
     const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '—';
     const cat     = trCardState(trEffectiveStage(r));
@@ -860,7 +871,13 @@ function renderTrkCards(list) {
         <div style="display:flex;gap:6px;align-items:center">${waBtnHtml}${trBadgeHtml(r)}</div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + (hasMore
+    ? `<div style="grid-column:1/-1;text-align:center;padding:1rem">
+        <button class="btn-secondary" onclick="trLoadMore()" style="font-size:13px;padding:9px 24px">
+          Muat lebih banyak (${list.length - trkRenderLimit} tersisa)
+        </button>
+      </div>`
+    : '');
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────────
