@@ -735,6 +735,21 @@ async function loadTracking() {
       r.status_resi_detail     = t?.status_resi_detail     || null;
     });
 
+    // Fetch retur_followup untuk semua resi
+    let followupByResi = {};
+    if (resiList.length) {
+      const RESI_CHUNK = 500;
+      for (let i = 0; i < resiList.length; i += RESI_CHUNK) {
+        const { data: fuData } = await sb.from('retur_followup')
+          .select('*')
+          .in('resi', resiList.slice(i, i + RESI_CHUNK));
+        (fuData || []).forEach(f => { followupByResi[f.resi] = f; });
+      }
+    }
+    rows.forEach(r => {
+      r.followup = r.resi ? (followupByResi[r.resi.trim()] || null) : null;
+    });
+
     trkAllData = rows;
     updateTrkCards(trkAllData);
     showTrkAlerts(trkAllData);
@@ -875,8 +890,9 @@ function renderTrkCards(list) {
       ${trStepperHtml(r)}
       <div class="oc-footer">
         <span style="font-size:12px;color:var(--muted)">${r.jumlah || ''}</span>
-        <div style="display:flex;gap:6px;align-items:center">${waBtnHtml}${trBadgeHtml(r)}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${waBtnHtml}${trBadgeHtml(r)}</div>
       </div>
+      ${trFollowupBadge(r) ? `<div style="margin-top:6px">${trFollowupBadge(r)}</div>` : ''}
     </div>`;
   }).join('') + (hasMore
     ? `<div style="grid-column:1/-1;text-align:center;padding:1rem">
@@ -916,6 +932,7 @@ function trOpenDetail(resi) {
     <div style="margin-top:10px">${trBadgeHtml(row)}</div>
     ${trStepperHtml(row)}
     ${historyHtml}
+    ${trFollowupModalHtml(row)}
   `;
   const actionsEl = document.getElementById('tr-modal-actions');
   if (actionsEl) {
@@ -991,6 +1008,72 @@ async function trRefreshAll() {
   } finally {
     btn.disabled = false; btn.textContent = origLabel;
   }
+}
+
+// ── FOLLOWUP RETUR ────────────────────────────────────────────────────────────
+const FOLLOWUP_FIELDS = [
+  { key:'cs_sudah_lapor',      label:'CS Sudah Lapor' },
+  { key:'fu1_cs',              label:'FU 1 CS' },
+  { key:'fu2_cs',              label:'FU 2 CS' },
+  { key:'fu3_cs',              label:'FU 3 CS' },
+  { key:'cs_lapor_setelah_fu', label:'CS Lapor Setelah FU' },
+  { key:'lapor_ekspedisi',     label:'Lapor Ekspedisi' },
+];
+
+function trFollowupBadge(row) {
+  if (trEffectiveStage(row) !== 'BERMASALAH') return '';
+  const f = row.followup;
+  if (f?.lapor_ekspedisi)     return '<span class="badge" style="background:var(--success-light);color:var(--success)">✅ Lapor Ekspedisi</span>';
+  if (f?.fu3_cs)              return '<span class="badge" style="background:#fef3c7;color:#b45309">📞 FU 3x</span>';
+  if (f?.fu2_cs)              return '<span class="badge" style="background:#fef3c7;color:#92400e">📞 FU 2x</span>';
+  if (f?.fu1_cs)              return '<span class="badge" style="background:#fffbeb;color:#d97706">📞 FU 1x</span>';
+  if (f?.cs_sudah_lapor)      return '<span class="badge" style="background:var(--accent-light);color:var(--accent)">📋 CS Sudah Lapor</span>';
+  return '<span class="badge" style="background:var(--danger-light);color:var(--danger)">⚠️ Belum Ditangani</span>';
+}
+
+function trFollowupModalHtml(row) {
+  if (trEffectiveStage(row) !== 'BERMASALAH') return '';
+  const f = row.followup || {};
+  return `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;font-family:var(--mono)">📋 Progress Penanganan</div>
+      ${FOLLOWUP_FIELDS.map(item => `
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;user-select:none">
+          <input type="checkbox" id="fu-${item.key}" ${f[item.key] ? 'checked' : ''}
+            onchange="trSaveFollowup('${row.resi}','${item.key}',this.checked)"
+            style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);flex-shrink:0">
+          <span style="font-size:13px;color:var(--text)">${item.label}</span>
+        </label>
+      `).join('')}
+      ${f.updated_by ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">Update terakhir: <strong>${f.updated_by}</strong> · ${trTimeAgo(f.updated_at)}</div>` : ''}
+    </div>`;
+}
+
+async function trSaveFollowup(resi, field, value) {
+  const row = trkAllData.find(r => r.resi === resi);
+  if (!row) return;
+  if (!row.followup) row.followup = { resi };
+  row.followup[field]     = value;
+  row.followup.updated_at = new Date().toISOString();
+  row.followup.updated_by = currentProfile?.nama || currentUser?.email || '—';
+
+  const { error } = await sb.from('retur_followup').upsert({
+    resi,
+    cs_sudah_lapor:      row.followup.cs_sudah_lapor      || false,
+    fu1_cs:              row.followup.fu1_cs              || false,
+    fu2_cs:              row.followup.fu2_cs              || false,
+    fu3_cs:              row.followup.fu3_cs              || false,
+    cs_lapor_setelah_fu: row.followup.cs_lapor_setelah_fu || false,
+    lapor_ekspedisi:     row.followup.lapor_ekspedisi     || false,
+    updated_at:          row.followup.updated_at,
+    updated_by:          row.followup.updated_by,
+  }, { onConflict: 'resi' });
+
+  if (error) { showToast('Gagal simpan: ' + error.message, 'error'); return; }
+
+  // Update badge di card tanpa reset filter/limit
+  renderTrkCards(trkFilteredCache);
+  showToast('Tersimpan!', 'success');
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
