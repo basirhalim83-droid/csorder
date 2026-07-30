@@ -660,11 +660,18 @@ async function loadTracking() {
       return;
     }
 
-    // Ambil cs_nama dari orderan_masuk
-    const { data: masukData } = await sb.from('orderan_masuk')
-      .select('hp, tanggal, cs_nama')
-      .gte('tanggal', trkStart)
-      .lte('tanggal', trkEnd);
+    // Ambil cs_nama dari orderan_masuk — pagination biar tidak kepotong limit 1000
+    let masukData = [], masukFrom = 0;
+    while (true) {
+      const { data: masukBatch } = await sb.from('orderan_masuk')
+        .select('hp, tanggal, cs_nama')
+        .gte('tanggal', trkStart)
+        .lte('tanggal', trkEnd)
+        .range(masukFrom, masukFrom + 999);
+      masukData = masukData.concat(masukBatch || []);
+      if (!masukBatch || masukBatch.length < 1000) break;
+      masukFrom += 1000;
+    }
     const csNamaMap = {};
     (masukData || []).forEach(r => {
       const hp  = normalizeHP(r.hp || '');
