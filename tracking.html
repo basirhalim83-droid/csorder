@@ -144,6 +144,9 @@ body.tracking-body { display: block; }
     </div>
   </div>
 
+  <!-- Sub-filter cards followup (muncul saat filter Bermasalah aktif) -->
+  <div id="trk-followup-stats" style="display:none;margin-bottom:12px"></div>
+
   <div id="trk-alerts"></div>
   <div class="tr-tabs" id="trk-tabs"></div>
 
@@ -592,7 +595,8 @@ const TR_ON_PROSES_STAGES = ['MENUNGGU_RESI','BELUM_DICEK','DIKIRIM','KOTA_TUJUA
 let trFilterStage = 'SEMUA';
 
 function trSetFilter(key) {
-  trFilterStage = key;
+  trFilterStage    = key;
+  trFollowupFilter = null;
   renderTrkTabs();
   applyTrkFilter();
 }
@@ -612,6 +616,65 @@ function renderTrkTabs() {
 let trkAllData       = [];
 let trkFilteredCache = [];
 let trkRenderLimit   = 100;
+let trFollowupFilter = null;
+
+function trFollowupLevel(row) {
+  const f = row.followup;
+  if (!f) return 'belum';
+  if (f.lapor_ekspedisi)      return 'lapor_ekspedisi';
+  if (f.cs_lapor_setelah_fu)  return 'cs_lapor_setelah_fu';
+  if (f.fu3_cs)               return 'fu3_cs';
+  if (f.fu2_cs)               return 'fu2_cs';
+  if (f.fu1_cs)               return 'fu1_cs';
+  if (f.cs_sudah_lapor)       return 'cs_sudah_lapor';
+  return 'belum';
+}
+
+const FOLLOWUP_STAT_META = [
+  { key:'belum',               label:'Belum Ditangani', color:'var(--danger)',  bg:'var(--danger-light)' },
+  { key:'cs_sudah_lapor',      label:'CS Sudah Lapor',  color:'var(--accent)',  bg:'var(--accent-light)' },
+  { key:'fu1_cs',              label:'FU 1x',           color:'#d97706',        bg:'#fffbeb' },
+  { key:'fu2_cs',              label:'FU 2x',           color:'#b45309',        bg:'#fef3c7' },
+  { key:'fu3_cs',              label:'FU 3x',           color:'#92400e',        bg:'#fde68a' },
+  { key:'cs_lapor_setelah_fu', label:'Lapor Stlh FU',   color:'#7c3aed',        bg:'#f5f3ff' },
+  { key:'lapor_ekspedisi',     label:'Lapor Ekspedisi', color:'var(--success)', bg:'var(--success-light)' },
+];
+
+function renderFollowupStats(bermasalahList) {
+  const wrap = document.getElementById('trk-followup-stats');
+  if (!wrap) return;
+  if (trFilterStage !== 'BERMASALAH') { wrap.style.display = 'none'; return; }
+
+  const counts = {};
+  FOLLOWUP_STAT_META.forEach(m => counts[m.key] = 0);
+  bermasalahList.forEach(r => counts[trFollowupLevel(r)]++);
+
+  wrap.style.display = 'grid';
+  wrap.style.gridTemplateColumns = 'repeat(auto-fit,minmax(100px,1fr))';
+  wrap.style.gap = '6px';
+
+  wrap.innerHTML = FOLLOWUP_STAT_META.map(m => {
+    const active = trFollowupFilter === m.key;
+    return `<div onclick="trSetFollowupFilter('${m.key}')"
+      style="background:${active ? m.color : 'var(--surface)'};
+             border:1.5px solid ${active ? m.color : 'var(--border)'};
+             border-radius:var(--radius);padding:8px 10px;cursor:pointer;
+             transition:all .15s;box-shadow:var(--shadow)">
+      <div style="font-size:9px;color:${active ? 'rgba(255,255,255,.75)' : 'var(--muted)'};
+                  text-transform:uppercase;letter-spacing:.4px;font-family:var(--mono);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        ${m.label}
+      </div>
+      <div style="font-size:18px;font-weight:700;color:${active ? '#fff' : m.color};line-height:1">
+        ${counts[m.key] || '—'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function trSetFollowupFilter(key) {
+  trFollowupFilter = trFollowupFilter === key ? null : key;
+  applyTrkFilter();
+}
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -791,10 +854,22 @@ function applyTrkFilter() {
     (r.resi    || '').toLowerCase().includes(search) ||
     (r.cs_nama || '').toLowerCase().includes(search)
   );
+  // Render followup sub-stats (hanya saat BERMASALAH aktif)
+  renderFollowupStats(filtered);
+
+  // Apply sub-filter followup
+  if (trFilterStage === 'BERMASALAH' && trFollowupFilter) {
+    filtered = filtered.filter(r => trFollowupLevel(r) === trFollowupFilter);
+  }
+
   trkFilteredCache = filtered;
   trkRenderLimit   = 100;
   renderTrkCards(filtered);
-  updateTrkCards(filtered);
+  updateTrkCards(trkAllData.filter(r => {
+    const stage = trEffectiveStage(r);
+    if (trFilterStage === 'ON_PROSES_GROUP') return TR_ON_PROSES_STAGES.includes(stage);
+    return true;
+  }));
   const info = filtered.length < trkAllData.length
     ? `${filtered.length} dari ${trkAllData.length} data`
     : `${trkAllData.length} data`;
