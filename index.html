@@ -76,7 +76,12 @@
 // Redirect kalau sudah login
 (async () => {
   const session = await getSession();
-  if (session) window.location.href = 'app.html';
+  if (!session) return;
+  const profile = await getProfile(session.user.id);
+  const role = profile?.role || 'cs';
+  if (role === 'admin')  window.location.href = 'admin.html';
+  else if (role === 'retur') window.location.href = 'tracking.html';
+  else window.location.href = 'app.html';
 })();
 
 function switchTab(tab) {
@@ -99,8 +104,12 @@ async function doLogin() {
   errEl.style.display = 'none';
 
   try {
-    await signIn(email, pass);
-    window.location.href = 'app.html';
+    const { user } = await signIn(email, pass);
+    const profile  = await getProfile(user.id);
+    const role     = profile?.role || 'cs';
+    if (role === 'admin')       window.location.href = 'admin.html';
+    else if (role === 'retur')  window.location.href = 'tracking.html';
+    else                        window.location.href = 'app.html';
   } catch(e) {
     showErr(errEl, e.message === 'Invalid login credentials'
       ? 'Email atau password salah.' : e.message);
