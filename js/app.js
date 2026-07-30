@@ -2683,10 +2683,13 @@ async function trFetchTrackingRows(masukList, range) {
   const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
   let trkByResi = {};
   if (resiList.length) {
-    const { data: trkData } = await sb.from('cs_order_tracking')
-      .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
-      .in('resi', resiList);
-    (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+    const RESI_CHUNK = 500;
+    for (let i = 0; i < resiList.length; i += RESI_CHUNK) {
+      const { data: trkData } = await sb.from('cs_order_tracking')
+        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
+        .in('resi', resiList.slice(i, i + RESI_CHUNK));
+      (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+    }
   }
   filtered.forEach(r => {
     const t = r.resi ? trkByResi[r.resi.trim()] : null;
