@@ -1200,13 +1200,14 @@ function trExportCSV() {
     lapor_ekspedisi:     'Lapor Ekspedisi',
   };
 
-  const headers = ['Tanggal','Nama','HP','CS','Ekspedisi','Resi','Status','Kota/Kab','Produk','Status Followup','Last Update'];
+  const headers = ['Tanggal','Nama','HP','CS','Ekspedisi','Resi','Status','Kota/Kab','Produk','Status Followup','Keterangan Masalah','Last Update'];
   const rows = data.map(r => {
-    const stage  = trEffectiveStage(r);
-    const meta   = TR_STAGE_META[stage];
-    const eks    = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
-    const hp08   = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '';
+    const stage   = trEffectiveStage(r);
+    const meta    = TR_STAGE_META[stage];
+    const eks     = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
+    const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '';
     const fuLabel = stage === 'BERMASALAH' ? (FOLLOWUP_LABEL[trFollowupLevel(r)] || '') : '';
+    const masalah = stage === 'BERMASALAH' ? extractMasalah(r) : '';
     const lastUpd = r.status_resi_updated_at
       ? new Date(r.status_resi_updated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
       : '';
@@ -1221,6 +1222,7 @@ function trExportCSV() {
       r.kabupaten      || '',
       r.jumlah         || '',
       fuLabel,
+      masalah,
       lastUpd,
     ];
   });
