@@ -169,6 +169,7 @@ body.tracking-body { display: block; }
     <input type="text" id="trk-search" class="trk-search" placeholder="🔍 Cari nama / HP / resi..." oninput="applyTrkFilter()">
     <div style="display:flex;gap:8px;margin-left:auto">
       <span id="trk-info" style="font-size:12px;color:var(--muted);font-family:var(--mono);align-self:center;white-space:nowrap">—</span>
+      <button class="btn-secondary" onclick="trExportCSV()" style="font-size:12px;padding:7px 12px">⬇️ Export</button>
       <button class="btn-secondary" id="trk-refresh-all-btn" onclick="trRefreshAll()" style="font-size:12px;padding:7px 12px">📡 Refresh Semua</button>
       <button class="btn-secondary" onclick="loadTracking()" style="font-size:12px;padding:7px 12px">🔄 Refresh</button>
     </div>
@@ -1182,6 +1183,59 @@ function showToast(msg, type = 'info') {
   t.textContent = msg;
   wrap.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ── EXPORT CSV ────────────────────────────────────────────────────────────────
+function trExportCSV() {
+  const data = trkFilteredCache;
+  if (!data.length) { showToast('Tidak ada data untuk diexport.', 'error'); return; }
+
+  const FOLLOWUP_LABEL = {
+    belum:               'Belum Ditangani',
+    cs_sudah_lapor:      'CS Sudah Lapor',
+    fu1_cs:              'FU 1x',
+    fu2_cs:              'FU 2x',
+    fu3_cs:              'FU 3x',
+    cs_lapor_setelah_fu: 'Lapor Stlh FU',
+    lapor_ekspedisi:     'Lapor Ekspedisi',
+  };
+
+  const headers = ['Tanggal','Nama','HP','CS','Ekspedisi','Resi','Status','Kota/Kab','Produk','Status Followup','Last Update'];
+  const rows = data.map(r => {
+    const stage  = trEffectiveStage(r);
+    const meta   = TR_STAGE_META[stage];
+    const eks    = extractEkspedisi(r.pembayaran) || r.pembayaran || '';
+    const hp08   = r.hp ? (r.hp.startsWith('0') ? r.hp : '0' + r.hp) : '';
+    const fuLabel = stage === 'BERMASALAH' ? (FOLLOWUP_LABEL[trFollowupLevel(r)] || '') : '';
+    const lastUpd = r.status_resi_updated_at
+      ? new Date(r.status_resi_updated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+      : '';
+    return [
+      r.tanggal        || '',
+      r.nama           || '',
+      hp08,
+      r.cs_nama        || '',
+      eks,
+      r.resi           || '',
+      meta?.label?.replace(/[\u{1F000}-\u{1FFFF}]|\p{Emoji}/gu, '').trim() || stage,
+      r.kabupaten      || '',
+      r.jumlah         || '',
+      fuLabel,
+      lastUpd,
+    ];
+  });
+
+  const escape = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv    = [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
+  const blob   = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url    = URL.createObjectURL(blob);
+  const label  = document.getElementById('trk-drp-label')?.textContent || 'data';
+  const a      = document.createElement('a');
+  a.href       = url;
+  a.download   = `tracking-${label.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Export ${data.length} data berhasil!`, 'success');
 }
 
 // Keyboard: Escape = tutup modal
