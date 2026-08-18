@@ -1,6 +1,8 @@
 // Proxy Cek Ongkir — semua via api-public.mengantar.com
 const SEARCH_BASE = 'https://api-public.mengantar.com';
-const ORIGIN_ID   = '5fc63315f8f44b34aa4c44c4'; // Gudang: Galur, Kulon Progo, DI Yogyakarta
+
+// origin_id per gudang — didapat dari Mengantar address search
+const ORIGIN_DEFAULT = '5fc63315f8f44b34aa4c44c4'; // Gudang: Galur, Kulon Progo, DI Yogyakarta
 
 // key = kode ekspedisi yang dipakai di app (EKSPEDISI_LIST js/app.js),
 // value = key kurir di response allEstimatePublic
@@ -24,6 +26,7 @@ module.exports = async function handler(req, res) {
   const keyword       = (req.query.keyword || '').trim();
   const destinationId = (req.query.destination_id || '').trim();
   const weight        = parseFloat(req.query.weight) || 1;
+  const originId      = (req.query.origin_id || '').trim() || ORIGIN_DEFAULT;
 
   // mode=search: cuma cari kandidat alamat (buat autocomplete), gak hitung ongkir
   if (req.query.mode === 'search') {
@@ -95,7 +98,7 @@ module.exports = async function handler(req, res) {
 
     // allEstimatePublic via api-public.mengantar.com
     const estR = await fetch(
-      `${SEARCH_BASE}/api/order/allEstimatePublic?origin_id=${ORIGIN_ID}&destination_id=${dest._id}&weight=${weight}`,
+      `${SEARCH_BASE}/api/order/allEstimatePublic?origin_id=${originId}&destination_id=${dest._id}&weight=${weight}`,
       { headers: { Accept: 'application/json' } }
     );
     const estJson = await estR.json();
