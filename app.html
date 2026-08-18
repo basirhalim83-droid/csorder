@@ -215,6 +215,17 @@
       </div>
     </div>
 
+    <!-- Pilih Gudang -->
+    <div class="card" style="padding:14px 18px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;color:var(--text-secondary);white-space:nowrap">📦 Gudang Pengirim</span>
+        <select class="f-input" id="sel-gudang" onchange="onGudangChange(this.value)"
+          style="flex:1;min-width:160px;max-width:280px;margin:0;padding:7px 10px;font-size:13px">
+          <option value="">Memuat...</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Step 1: Paste -->
     <div class="card">
       <div class="card-title">1. Paste Teks Orderan</div>
@@ -565,6 +576,14 @@ Keterangan: Bonus masker"></textarea>
 
     <div class="card">
       <div class="card-title">Cari Tujuan</div>
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="f-group">
+          <label class="f-label">Gudang Pengirim</label>
+          <select class="f-input" id="sel-gudang-ongkir" onchange="onGudangChange(this.value)">
+            <option value="">Memuat...</option>
+          </select>
+        </div>
+      </div>
       <div class="form-grid cols-1" style="margin-bottom:10px">
         <div class="f-group" style="position:relative">
           <label class="f-label">Alamat Tujuan</label>

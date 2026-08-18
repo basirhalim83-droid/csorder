@@ -161,6 +161,15 @@
       Template WA
     </div>
 
+    <div class="nav-item" id="nav-gudang" onclick="switchPage('gudang')">
+      <span class="nav-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </span>
+      Gudang
+    </div>
+
     <div class="nav-item" id="nav-wilayahbaru" onclick="switchPage('wilayahbaru')" style="display:flex;align-items:center;justify-content:space-between">
       <span style="display:flex;align-items:center;gap:8px">
         <span class="nav-icon">
@@ -915,6 +924,66 @@
     <div id="trk-cards" class="trk-grid"></div>
   </div>
 
+  <!-- ══ PAGE: GUDANG ══ -->
+  <div id="page-gudang" class="page">
+    <div class="page-title">Gudang</div>
+    <div class="page-sub">Kelola gudang pengirim — origin ongkir otomatis sesuai gudang yang dipilih CS</div>
+
+    <!-- Form tambah gudang -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Tambah Gudang</div>
+
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="f-group">
+          <label class="f-label">Nama Gudang</label>
+          <input class="f-input" id="gudang-nama" placeholder="cth: Gudang Jakarta" />
+        </div>
+        <div class="f-group" style="position:relative">
+          <label class="f-label">Cari Lokasi Gudang <span style="color:var(--muted)">(kecamatan / kota)</span></label>
+          <input class="f-input" id="gudang-keyword" placeholder="cth: Cakung Jakarta Timur" autocomplete="off" oninput="scheduleGudangSearch()" />
+          <div id="gudang-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:99;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;margin-top:2px"></div>
+        </div>
+      </div>
+
+      <!-- Preview lokasi terpilih -->
+      <div id="gudang-selected-preview" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--accent-light);border:1px solid var(--accent);border-radius:8px;font-size:12px;color:var(--accent)">
+        <strong>Lokasi dipilih:</strong> <span id="gudang-selected-label"></span>
+        <input type="hidden" id="gudang-origin-id" />
+        <input type="hidden" id="gudang-kota" />
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn-save" onclick="addGudang()">Simpan</button>
+        <span id="gudang-add-status" style="font-size:12px;display:none"></span>
+      </div>
+    </div>
+
+    <!-- List gudang -->
+    <div class="table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700">Daftar Gudang</span>
+        <button class="btn-secondary" onclick="loadGudangAdmin()" style="padding:6px 14px;font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nama</th>
+              <th>Lokasi</th>
+              <th>Status</th>
+              <th>Default</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="gudang-tbody">
+            <tr><td colspan="6" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ PAGE: WILAYAH BARU ══ -->
   <div id="page-wilayahbaru" class="page">
     <div class="page-title">Wilayah Baru</div>
@@ -1125,12 +1194,12 @@ function resetTemplate() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','dashboard','rekap','analisis','produk','users','fonnte','sku','tracking','wilayahbaru','template'].forEach(p => {
+  ['overview','dashboard','rekap','analisis','produk','users','fonnte','sku','tracking','wilayahbaru','template','gudang'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', produk:'Analisis Produk', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', produk:'Analisis Produk', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA', gudang:'Gudang' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') {
     // Init drp ke hari ini kalau belum pernah dipilih
@@ -1150,6 +1219,7 @@ function switchPage(name) {
   if (name === 'tracking')    loadTracking();
   if (name === 'wilayahbaru') loadWilayahBaru();
   if (name === 'template')    loadTemplate();
+  if (name === 'gudang')      loadGudangAdmin();
 }
 
 // ══ WILAYAH BARU ═════════════════════════════════════════════════════════════
@@ -1307,6 +1377,171 @@ async function deleteSku(id) {
     const { error } = await sb.from('sku_produk').delete().eq('id', id);
     if (error) throw error;
     await loadSku();
+  } catch(e) {
+    showToast('Gagal hapus: ' + e.message, 'error');
+  }
+}
+
+// ══ GUDANG ═══════════════════════════════════════════════════════════════════
+let _gudangSearchTimer = null;
+let gudangSelectedLoc  = null; // { id, label, kota }
+
+function scheduleGudangSearch() {
+  clearTimeout(_gudangSearchTimer);
+  _gudangSearchTimer = setTimeout(runGudangSearch, 300);
+}
+
+async function runGudangSearch() {
+  const keyword = document.getElementById('gudang-keyword').value.trim();
+  const box = document.getElementById('gudang-suggest');
+  if (!keyword || keyword.length < 3) { box.style.display = 'none'; return; }
+  // Reset pilihan kalau keyword berubah
+  if (gudangSelectedLoc && gudangSelectedLoc.label !== keyword) {
+    gudangSelectedLoc = null;
+    document.getElementById('gudang-selected-preview').style.display = 'none';
+  }
+  box.style.display = 'block';
+  box.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted)">Mencari...</div>';
+  try {
+    const r = await fetch(`/api/ongkir?mode=search&keyword=${encodeURIComponent(keyword)}`);
+    const json = await r.json();
+    const list = json?.data || [];
+    if (!list.length) {
+      box.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted)">Lokasi tidak ditemukan</div>';
+      return;
+    }
+    box.innerHTML = list.map((d, i) => `
+      <div data-idx="${i}" style="padding:9px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background=''"
+        onclick="selectGudangLoc(${i})">
+        ${d.label}
+      </div>`).join('');
+    box._data = list;
+  } catch(e) {
+    box.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#ef4444">Gagal mencari lokasi</div>';
+  }
+}
+
+function selectGudangLoc(idx) {
+  const box = document.getElementById('gudang-suggest');
+  const d = box._data?.[idx];
+  if (!d) return;
+  gudangSelectedLoc = { id: d.id, label: d.label, kota: `${d.kecamatan}, ${d.kabupaten}` };
+  document.getElementById('gudang-keyword').value     = d.label;
+  document.getElementById('gudang-origin-id').value   = d.id;
+  document.getElementById('gudang-kota').value         = gudangSelectedLoc.kota;
+  document.getElementById('gudang-selected-label').textContent = d.label;
+  document.getElementById('gudang-selected-preview').style.display = 'block';
+  box.style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  const box = document.getElementById('gudang-suggest');
+  const inp = document.getElementById('gudang-keyword');
+  if (box && !box.contains(e.target) && e.target !== inp) box.style.display = 'none';
+});
+
+async function loadGudangAdmin() {
+  const tbody = document.getElementById('gudang-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Memuat...</td></tr>';
+  try {
+    const { data, error } = await sb.from('gudang').select('*').order('id');
+    if (error) throw error;
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada gudang</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map((g, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${g.nama}</strong></td>
+        <td style="color:var(--muted);font-size:12px">${g.kota}</td>
+        <td>
+          <span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700;
+            background:${g.aktif ? '#dcfce7' : '#fee2e2'};color:${g.aktif ? '#16a34a' : '#dc2626'}">
+            ${g.aktif ? 'Aktif' : 'Nonaktif'}
+          </span>
+        </td>
+        <td>
+          ${g.is_default
+            ? '<span style="color:#f59e0b;font-weight:700;font-size:12px">⭐ Default</span>'
+            : `<button class="btn-secondary" onclick="setDefaultGudang(${g.id})" style="padding:4px 10px;font-size:11px">Set Default</button>`}
+        </td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-secondary" onclick="toggleAktifGudang(${g.id}, ${g.aktif})" style="padding:4px 10px;font-size:11px">
+            ${g.aktif ? 'Nonaktifkan' : 'Aktifkan'}
+          </button>
+          ${g.is_default ? '' : `<button class="btn-del" onclick="deleteGudang(${g.id})">Hapus</button>`}
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function addGudang() {
+  const nama     = document.getElementById('gudang-nama').value.trim();
+  const originId = document.getElementById('gudang-origin-id').value.trim();
+  const kota     = document.getElementById('gudang-kota').value.trim();
+  const status   = document.getElementById('gudang-add-status');
+
+  if (!nama)     { showToast('Nama gudang wajib diisi', 'error'); return; }
+  if (!originId) { showToast('Pilih lokasi gudang dari hasil pencarian dulu', 'error'); return; }
+
+  status.style.display = 'inline';
+  status.textContent   = 'Menyimpan...';
+  status.style.color   = 'var(--muted)';
+
+  try {
+    const { error } = await sb.from('gudang').insert({ nama, kota, origin_id: originId, is_default: false, aktif: true });
+    if (error) throw error;
+    status.textContent = '✓ Gudang berhasil ditambahkan';
+    status.style.color = '#22c55e';
+    document.getElementById('gudang-nama').value    = '';
+    document.getElementById('gudang-keyword').value = '';
+    document.getElementById('gudang-origin-id').value = '';
+    document.getElementById('gudang-kota').value    = '';
+    document.getElementById('gudang-selected-preview').style.display = 'none';
+    gudangSelectedLoc = null;
+    await loadGudangAdmin();
+    setTimeout(() => { status.style.display = 'none'; }, 2500);
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+async function toggleAktifGudang(id, currentAktif) {
+  try {
+    const { error } = await sb.from('gudang').update({ aktif: !currentAktif }).eq('id', id);
+    if (error) throw error;
+    await loadGudangAdmin();
+  } catch(e) {
+    showToast('Gagal update: ' + e.message, 'error');
+  }
+}
+
+async function setDefaultGudang(id) {
+  try {
+    // Reset semua dulu, baru set yang dipilih
+    await sb.from('gudang').update({ is_default: false }).neq('id', 0);
+    const { error } = await sb.from('gudang').update({ is_default: true }).eq('id', id);
+    if (error) throw error;
+    await loadGudangAdmin();
+    showToast('Default gudang berhasil diubah', 'success');
+  } catch(e) {
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+async function deleteGudang(id) {
+  if (!confirm('Hapus gudang ini? Pastikan tidak ada order aktif dari gudang ini.')) return;
+  try {
+    const { error } = await sb.from('gudang').delete().eq('id', id);
+    if (error) throw error;
+    await loadGudangAdmin();
+    showToast('Gudang dihapus', 'success');
   } catch(e) {
     showToast('Gagal hapus: ' + e.message, 'error');
   }
