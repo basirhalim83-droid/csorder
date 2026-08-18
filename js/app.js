@@ -10,6 +10,33 @@ let currentProfile = null;
 let parsedData    = null;   // hasil AI parsing
 let todayOrders   = [];     // orderan hari ini milik CS ini
 
+// ── GUDANG ────────────────────────────────────────────────────────────────────
+let gudangList    = [];
+let selectedGudang = null;
+
+async function loadGudang() {
+  const { data } = await sb.from('gudang').select('*').eq('aktif', true).order('id');
+  if (!data?.length) return;
+  gudangList = data;
+  selectedGudang = data.find(g => g.is_default) || data[0];
+  ['sel-gudang', 'sel-gudang-ongkir'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = data.map(g => `<option value="${g.id}">${g.nama}</option>`).join('');
+    el.value = selectedGudang.id;
+  });
+}
+
+function onGudangChange(id) {
+  selectedGudang = gudangList.find(g => g.id == id) || selectedGudang;
+  ['sel-gudang', 'sel-gudang-ongkir'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if (el) el.value = id;
+  });
+  // Reset ongkir check karena gudang berubah
+  scheduleOngkirCheck();
+}
+
 // ── DATE RANGE PICKER (port dari BotWA analytics) ────────────────────────────
 let drpSelStart = null, drpSelEnd = null, drpPickingEnd = false;
 let drpViewYear = new Date().getFullYear(), drpViewMonth = new Date().getMonth();
@@ -203,6 +230,7 @@ function drpNav(dir) {
     document.getElementById('theme-icon-mobile').textContent = '☀️';
   }
 
+  await loadGudang();
   await loadDashboard();
   await loadHistoryMini();
   checkAndShowLockBanner();
@@ -1223,6 +1251,7 @@ async function validateOngkirTarif() {
   let json;
   try {
     const params = new URLSearchParams({ keyword, weight: 1, kelurahan: kel, kecamatan: kec, kabupaten: kab });
+    if (selectedGudang?.origin_id) params.set('origin_id', selectedGudang.origin_id);
     const r = await fetch(`/api/ongkir?${params}`);
     json = await r.json();
   } catch (e) { return; }
@@ -1345,6 +1374,7 @@ async function doCekOngkir() {
       provinsi: d.provinsi,
       weight: berat,
     });
+    if (selectedGudang?.origin_id) params.set('origin_id', selectedGudang.origin_id);
     const r = await fetch(`/api/ongkir?${params.toString()}`);
     const json = await r.json();
     if (!json.ok) {
@@ -1654,7 +1684,9 @@ async function doSubmitExec() {
       cs_nama    : profile.nama,
       tanggal    : today,
       raw_input  : document.getElementById('paste-input').value.trim(),
-      created_at : nowWIB()
+      created_at : nowWIB(),
+      gudang_id  : selectedGudang?.id   || null,
+      gudang_nama: selectedGudang?.nama || null,
     };
 
     const { data: inserted, error: insertErr } = await sb
