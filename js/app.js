@@ -3077,15 +3077,18 @@ async function loadBermasalah() {
     if (!bmResp.ok) throw new Error('Gagal fetch /api/bermasalah');
     const bmData = await bmResp.json();
 
-    // Filter: bulan order (order_date dari room_work) + CS ini
+    // Filter: bulan berdasarkan order_date room_work, fallback ke status_resi_updated_at
+    // kalau order_date null atau belum ada room_work
+    const myNama = (currentProfile.nama || '').toLowerCase();
     bmAllData = bmData.filter(t => {
-      const rw = t._rw;
-      if (!rw) return false;
-      const orderDate = rw.order_date || '';
-      if (orderDate.slice(0, 7) !== selectedMonth) return false;
-      const csNama = (rw.cs_nama || '').toLowerCase();
-      const myNama = (currentProfile.nama || '').toLowerCase();
-      return csNama === myNama;
+      // Filter bulan
+      const dateCheck = (t._rw?.order_date || t.status_resi_updated_at || '').slice(0, 7);
+      if (dateCheck !== selectedMonth) return false;
+      // Filter CS — kalau room_work belum ada cs_nama, tetap tampilkan
+      if (t._rw?.cs_nama) {
+        return (t._rw.cs_nama || '').toLowerCase() === myNama;
+      }
+      return false; // tidak bisa tahu milik CS siapa kalau cs_nama kosong
     }).map(t => ({
       resi:                   t.resi,
       nama:                   t._rw?.nama_pembeli || '—',
