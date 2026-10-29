@@ -584,6 +584,8 @@ Keterangan: Bonus masker"></textarea>
 
     <!-- Filter bar -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <input type="month" id="bm-filter-month" onchange="loadBermasalah()"
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:140px">
       <select id="bm-filter-eks" onchange="applyBmFilter()"
         style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:120px">
         <option value="">Semua Ekspedisi</option>
