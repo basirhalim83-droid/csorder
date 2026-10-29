@@ -2934,7 +2934,7 @@ function trOpenDetail(resi) {
           <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.description || h.desc || h.content || h.content2 || '-')}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${
             h.date || (h.actual_time ? new Date(h.actual_time*1000).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '')
-          }${(() => { const loc = typeof h.current_location === 'string' ? h.current_location : (typeof h.location_name === 'string' ? h.location_name : ''); return loc ? ' · ' + loc : ''; })()}</div>
+          }${(() => { const loc = typeof h.current_location === 'string' ? h.current_location : (h.current_location?.location_name || h.location_name || ''); return loc ? ' · ' + loc : ''; })()}</div>
         </div>
       </div>`).join('')}</div>`;
   }
@@ -3408,7 +3408,19 @@ async function bmSaveLog() {
     }, { onConflict: 'resi' });
     if (dbErr) throw dbErr;
 
-    // 3. Update lokal map & re-render card
+    // 3. Sync ke room_work Akuisisi (fire and forget — tidak block UI)
+    fetch('/api/bermasalah', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resi:           bmLogResi,
+        type:           bmLogTypeVal,
+        screenshot_url: publicUrl,
+        cs_nama:        currentProfile.nama || '',
+      }),
+    }).catch(() => {});
+
+    // 4. Update lokal map & re-render card
     bmLogMap[bmLogResi] = {
       resi:           bmLogResi,
       type:           bmLogTypeVal,
