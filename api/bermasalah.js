@@ -1,7 +1,7 @@
 // GET /api/bermasalah
 // Ambil semua resi BERMASALAH dari akuisisi_orders + room_work.
 // Tidak perlu kirim resi list — langsung filter status='BERMASALAH' di server.
-// Jauh lebih cepat karena BERMASALAH biasanya << total order bulan ini.
+// Paginate akuisisi_orders agar tidak ada yang terpotong (limit=1000/page).
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
@@ -14,17 +14,28 @@ module.exports = async function handler(req, res) {
 
   const headers = { apikey: AKUISISI_KEY, Authorization: `Bearer ${AKUISISI_KEY}` };
 
-  // 1. Ambil semua resi BERMASALAH dari akuisisi_orders
+  // 1. Ambil SEMUA resi BERMASALAH dari akuisisi_orders — paginate agar tidak terpotong
   let trackData = [];
-  try {
-    const r = await fetch(
-      `${AKUISISI_URL}/rest/v1/akuisisi_orders`
-      + `?select=id,status_resi,status_resi_step,status_resi_updated_at,status_resi_detail,ekspedisi`
-      + `&status_resi=eq.BERMASALAH&limit=2000`,
-      { headers }
-    );
-    if (r.ok) trackData = await r.json();
-  } catch(_) {}
+  const PAGE = 1000;
+  let offset = 0;
+  while (true) {
+    try {
+      const r = await fetch(
+        `${AKUISISI_URL}/rest/v1/akuisisi_orders`
+        + `?select=id,status_resi,status_resi_step,status_resi_updated_at,status_resi_detail,ekspedisi`
+        + `&status_resi=eq.BERMASALAH`
+        + `&order=status_resi_updated_at.desc`
+        + `&limit=${PAGE}&offset=${offset}`,
+        { headers }
+      );
+      if (!r.ok) break;
+      const page = await r.json();
+      if (!Array.isArray(page) || !page.length) break;
+      trackData = trackData.concat(page);
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    } catch(_) { break; }
+  }
 
   if (!trackData.length) return res.status(200).json([]);
 
