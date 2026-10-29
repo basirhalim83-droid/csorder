@@ -2948,7 +2948,7 @@ function trOpenDetail(resi) {
   const actionsEl = document.getElementById('tr-modal-actions');
   if (actionsEl) {
     actionsEl.innerHTML = `
-      ${(isBermasalah && row.hp) ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none">💬 WA Customer</a>` : ''}
+      ${(isBermasalah && row.hp) ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none">📞 Hubungi Customer</a>` : ''}
       <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
     `;
   }
