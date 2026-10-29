@@ -3088,7 +3088,8 @@ async function loadBermasalah() {
     const trkByResi = {};
     bmData.forEach(t => { trkByResi[t.resi] = t; });
 
-    // 2. Ambil detail order hanya untuk resi BERMASALAH ini, filter bulan + CS
+    // 2. Ambil detail order: filter bulan ORDER + CS — resi bermasalah yg ordernya bulan ini
+    // (order Oktober yang undell bulan depan tetap masuk rekap Oktober)
     const resiList = bmData.map(t => t.resi).filter(Boolean);
     const CHUNK = 200;
     let allOrders = [];
