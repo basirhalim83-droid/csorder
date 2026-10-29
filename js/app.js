@@ -3078,31 +3078,64 @@ async function loadBermasalah() {
     const bmData = await bmResp.json();
 
     // Filter: bulan berdasarkan order_date room_work, fallback ke status_resi_updated_at
-    // kalau order_date null atau belum ada room_work
     const myNama = (currentProfile.nama || '').toLowerCase();
-    bmAllData = bmData.filter(t => {
-      // Filter bulan
-      const dateCheck = (t._rw?.order_date || t.status_resi_updated_at || '').slice(0, 7);
-      if (dateCheck !== selectedMonth) return false;
-      // Filter CS — kalau room_work belum ada cs_nama, tetap tampilkan
-      if (t._rw?.cs_nama) {
-        return (t._rw.cs_nama || '').toLowerCase() === myNama;
+
+    // Pisah: yang sudah ada cs_nama di room_work vs yang belum
+    const thisMonth = bmData.filter(t =>
+      (t._rw?.order_date || t.status_resi_updated_at || '').slice(0, 7) === selectedMonth
+    );
+    const withName    = thisMonth.filter(t => t._rw?.cs_nama);
+    const noName      = thisMonth.filter(t => !t._rw?.cs_nama);
+
+    // Untuk yang belum ada cs_nama, lookup all_orderan di CS Input Supabase
+    const noNameResiMap = {};
+    if (noName.length) {
+      const resiIds = noName.map(t => t.resi);
+      // Chunk per 500 agar tidak over URL limit
+      const CHUNK = 500;
+      for (let i = 0; i < resiIds.length; i += CHUNK) {
+        const chunk = resiIds.slice(i, i + CHUNK);
+        try {
+          const { data: aoRows } = await sb
+            .from('all_orderan')
+            .select('resi,cs,nama,hp,kabupaten,jumlah,tanggal,pembayaran')
+            .in('resi', chunk);
+          (aoRows || []).forEach(row => { noNameResiMap[row.resi] = row; });
+        } catch(_) {}
       }
-      return false; // tidak bisa tahu milik CS siapa kalau cs_nama kosong
-    }).map(t => ({
+    }
+
+    // Merge semua: prioritas room_work, fallback all_orderan untuk yang noName
+    const mapItem = (t, aoRow) => ({
       resi:                   t.resi,
-      nama:                   t._rw?.nama_pembeli || '—',
-      hp:                     t._rw?.hp_pembeli   || '',
-      kabupaten:              t._rw?.kota_tujuan  || '',
-      jumlah:                 t._rw?.produk       || '',
-      tanggal:                t._rw?.order_date   || '',
+      nama:                   t._rw?.nama_pembeli || aoRow?.nama    || '—',
+      hp:                     t._rw?.hp_pembeli   || aoRow?.hp      || '',
+      kabupaten:              t._rw?.kota_tujuan  || aoRow?.kabupaten || '',
+      jumlah:                 t._rw?.produk       || aoRow?.jumlah  || '',
+      tanggal:                t._rw?.order_date   || aoRow?.tanggal || '',
       ekspedisi:              t.ekspedisi         || t._rw?.ekspedisi || '',
       status_resi:            t.status_resi,
       status_resi_step:       t.status_resi_step,
       status_resi_updated_at: t.status_resi_updated_at,
       status_resi_detail:     t.status_resi_detail,
       _rw:                    t._rw,
-    }));
+    });
+
+    const matched = [
+      // Yang sudah punya cs_nama di room_work — filter langsung
+      ...withName
+        .filter(t => (t._rw.cs_nama || '').toLowerCase() === myNama)
+        .map(t => mapItem(t, null)),
+      // Yang belum punya cs_nama — cek di all_orderan, filter by nama_cs
+      ...noName
+        .filter(t => {
+          const ao = noNameResiMap[t.resi];
+          return ao && (ao.cs || '').toLowerCase() === myNama;
+        })
+        .map(t => mapItem(t, noNameResiMap[t.resi])),
+    ];
+
+    bmAllData = matched;
 
     if (!bmAllData.length) {
       if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada resi bermasalah di bulan ini.</div>';
