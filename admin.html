@@ -1261,12 +1261,11 @@ async function loadAdminBermasalah() {
     if (!bmResp.ok) throw new Error('Gagal fetch /api/bermasalah');
     const bmData = await bmResp.json();
 
-    // Filter by bulan order_date dari room_work
+    // Filter by bulan — order_date dari room_work, fallback ke status_resi_updated_at
+    // kalau order_date null atau belum ada room_work
     abmAllData = bmData.filter(t => {
-      const rw = t._rw;
-      if (!rw) return false;
-      const orderDate = rw.order_date || '';
-      return orderDate.slice(0, 7) === selectedMonth;
+      const dateCheck = (t._rw?.order_date || t.status_resi_updated_at || '').slice(0, 7);
+      return dateCheck === selectedMonth;
     }).map(t => ({
       resi:                   t.resi,
       nama:                   t._rw?.nama_pembeli || '—',
