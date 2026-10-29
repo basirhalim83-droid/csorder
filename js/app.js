@@ -3137,6 +3137,9 @@ async function loadBermasalah() {
 
     bmAllData = matched;
 
+    // Load log respon customer (tidak balas / sudah balas)
+    await loadBmLogs(bmAllData.map(r => r.resi));
+
     if (!bmAllData.length) {
       if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada resi bermasalah di bulan ini.</div>';
       if (infoEl) infoEl.textContent = '0 resi bermasalah';
@@ -3215,12 +3218,33 @@ function renderBmCards(list) {
   trkAllData = bmAllData;
 
   cardsEl.innerHTML = list.map(r => {
-    const eks     = r.ekspedisi || '—';
-    const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0'+r.hp) : '—';
-    const fuBadge = trFollowupBadge(r);
-    const masalah = extractMasalah ? extractMasalah(r) : '';
+    const eks       = r.ekspedisi || '—';
+    const hp08      = r.hp ? (r.hp.startsWith('0') ? r.hp : '0'+r.hp) : '—';
+    const fuBadge   = trFollowupBadge(r);
+    const masalah   = extractMasalah ? extractMasalah(r) : '';
+    const log       = bmLogMap[r.resi];
+    const resiSafe  = (r.resi || '').replace(/'/g, "\\'");
+
+    // Badge kalau sudah ada log
+    let logHtml = '';
+    if (log) {
+      const isTidak = log.type === 'tidak_balas';
+      const cls     = isTidak ? 'bm-log-badge-tidak' : 'bm-log-badge-sudah';
+      const icon    = isTidak ? '📵' : '💬';
+      const label   = isTidak ? 'Tidak Balas' : 'Sudah Balas';
+      const thumb   = log.screenshot_url ? `<img src="${log.screenshot_url}" onclick="event.stopPropagation();window.open('${log.screenshot_url}','_blank')" />` : '';
+      const ts      = log.created_at ? new Date(log.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+      logHtml = `<div class="bm-log-badge ${cls}" onclick="event.stopPropagation();bmOpenLogModal('${resiSafe}')">${thumb}<span>${icon} ${label}${ts ? ' · '+ts : ''}</span></div>`;
+    } else {
+      // Tampilkan tombol aksi kalau belum ada log
+      logHtml = `<div class="bm-log-actions" onclick="event.stopPropagation()">
+        <button class="bm-log-btn bm-log-btn-tidak" onclick="bmOpenLogModal('${resiSafe}','tidak_balas')">📵 Tidak Balas</button>
+        <button class="bm-log-btn bm-log-btn-sudah"  onclick="bmOpenLogModal('${resiSafe}','sudah_balas')">💬 Sudah Balas</button>
+      </div>`;
+    }
+
     return `
-    <div class="trk-card" onclick="trOpenDetail('${r.resi || ''}')">
+    <div class="trk-card" onclick="trOpenDetail('${resiSafe}')">
       <div class="trk-card-top">
         <div>
           <div class="trk-card-name">${r.nama || '—'}</div>
@@ -3236,6 +3260,163 @@ function renderBmCards(list) {
         <span>📅 ${r.tanggal || ''}</span>
       </div>
       ${fuBadge ? `<div style="margin-top:6px">${fuBadge}</div>` : ''}
+      ${logHtml}
     </div>`;
   }).join('');
+}
+
+// ── BM LOG: Respon Customer (Tidak Balas / Sudah Balas + Screenshot) ──────────
+
+let bmLogMap       = {};  // { resi: log_row }
+let bmLogResi      = null;
+let bmLogTypeVal   = null;
+let bmLogSsBlob    = null;
+
+async function loadBmLogs(resiList) {
+  bmLogMap = {};
+  if (!resiList.length) return;
+  const CHUNK = 500;
+  for (let i = 0; i < resiList.length; i += CHUNK) {
+    const chunk = resiList.slice(i, i + CHUNK);
+    try {
+      const { data } = await sbSS
+        .from('bermasalah_cs_log')
+        .select('resi,type,screenshot_url,catatan,created_at,cs_nama')
+        .in('resi', chunk)
+        .order('created_at', { ascending: false });
+      // Simpan entry terbaru per resi
+      (data || []).forEach(row => {
+        if (!bmLogMap[row.resi]) bmLogMap[row.resi] = row;
+      });
+    } catch(_) {}
+  }
+}
+
+function bmOpenLogModal(resi, type) {
+  bmLogResi    = resi;
+  bmLogSsBlob  = null;
+
+  const modal   = document.getElementById('bm-log-modal');
+  const titleEl = document.getElementById('bm-log-modal-title');
+  const subEl   = document.getElementById('bm-log-modal-sub');
+  if (!modal) return;
+
+  // Isi judul
+  const row = bmAllData.find(r => r.resi === resi);
+  titleEl.textContent = 'Respon Customer';
+  subEl.textContent   = (row?.nama || '') + (resi ? ' · ' + resi : '');
+
+  // Reset form
+  document.querySelectorAll('input[name="bm-log-type"]').forEach(el => el.checked = false);
+  document.getElementById('bm-log-type-tidak').classList.remove('selected-tidak','selected-sudah');
+  document.getElementById('bm-log-type-sudah').classList.remove('selected-tidak','selected-sudah');
+  document.getElementById('bm-log-catatan').value = '';
+  bmLogSsClear();
+
+  // Kalau ada log sebelumnya, pre-fill type
+  const existing = bmLogMap[resi];
+  const initType = type || (existing?.type) || null;
+  if (initType) {
+    const radio = document.querySelector(`input[name="bm-log-type"][value="${initType}"]`);
+    if (radio) { radio.checked = true; bmLogTypeVal = initType; bmLogApplyTypeStyle(initType); }
+    if (existing?.catatan) document.getElementById('bm-log-catatan').value = existing.catatan;
+  } else {
+    bmLogTypeVal = null;
+  }
+
+  modal.style.display = 'flex';
+}
+
+function bmCloseLogModal() {
+  document.getElementById('bm-log-modal').style.display = 'none';
+  bmLogResi   = null;
+  bmLogSsBlob = null;
+}
+
+function bmLogTypeChange(radio) {
+  bmLogTypeVal = radio.value;
+  bmLogApplyTypeStyle(radio.value);
+}
+
+function bmLogApplyTypeStyle(type) {
+  const elTidak = document.getElementById('bm-log-type-tidak');
+  const elSudah = document.getElementById('bm-log-type-sudah');
+  elTidak.classList.remove('selected-tidak','selected-sudah');
+  elSudah.classList.remove('selected-tidak','selected-sudah');
+  if (type === 'tidak_balas') elTidak.classList.add('selected-tidak');
+  if (type === 'sudah_balas') elSudah.classList.add('selected-sudah');
+}
+
+function bmLogSsPreview(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  bmLogSsBlob = file;
+  const url = URL.createObjectURL(file);
+  const img  = document.getElementById('bm-log-ss-img');
+  img.src    = url;
+  document.getElementById('bm-log-ss-preview').style.display = 'block';
+  document.getElementById('bm-log-ss-label').style.display  = 'none';
+}
+
+function bmLogSsClear() {
+  bmLogSsBlob = null;
+  document.getElementById('bm-log-ss-input').value = '';
+  document.getElementById('bm-log-ss-preview').style.display = 'none';
+  document.getElementById('bm-log-ss-label').style.display   = 'flex';
+  const img = document.getElementById('bm-log-ss-img');
+  if (img) { img.src = ''; URL.revokeObjectURL?.(img.src); }
+}
+
+function bmLogSsFullView() {
+  const img = document.getElementById('bm-log-ss-img');
+  if (img?.src) window.open(img.src, '_blank');
+}
+
+async function bmSaveLog() {
+  if (!bmLogResi)    { showToast('Resi tidak diketahui.', 'error'); return; }
+  if (!bmLogTypeVal) { showToast('Pilih status customer dulu.', 'error'); return; }
+  if (!bmLogSsBlob)  { showToast('Upload screenshot bukti dulu.', 'error'); return; }
+
+  const btn = document.getElementById('bm-log-save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
+
+  try {
+    // 1. Upload screenshot ke storage
+    const ext  = bmLogSsBlob.type.includes('png') ? 'png' : 'jpg';
+    const path = `bermasalah/${bmLogResi}/${bmLogTypeVal}_${Date.now()}.${ext}`;
+    const { error: upErr } = await sbSS.storage.from(SS_BUCKET).upload(path, bmLogSsBlob, { upsert: true, contentType: bmLogSsBlob.type });
+    if (upErr) throw upErr;
+    const { data: { publicUrl } } = sbSS.storage.from(SS_BUCKET).getPublicUrl(path);
+
+    // 2. Simpan log ke bermasalah_cs_log
+    const catatan = document.getElementById('bm-log-catatan').value.trim();
+    const { error: dbErr } = await sbSS.from('bermasalah_cs_log').upsert({
+      resi:           bmLogResi,
+      cs_id:          currentUser.id,
+      cs_nama:        currentProfile.nama || '',
+      type:           bmLogTypeVal,
+      screenshot_url: publicUrl,
+      catatan:        catatan || null,
+      created_at:     new Date().toISOString(),
+    }, { onConflict: 'resi' });
+    if (dbErr) throw dbErr;
+
+    // 3. Update lokal map & re-render card
+    bmLogMap[bmLogResi] = {
+      resi:           bmLogResi,
+      type:           bmLogTypeVal,
+      screenshot_url: publicUrl,
+      catatan:        catatan || null,
+      cs_nama:        currentProfile.nama || '',
+      created_at:     new Date().toISOString(),
+    };
+
+    showToast('Respon customer tersimpan!', 'success');
+    bmCloseLogModal();
+    applyBmFilter(); // re-render cards
+  } catch(e) {
+    showToast('Gagal simpan: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Simpan';
+  }
 }
