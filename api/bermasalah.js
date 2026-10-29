@@ -1,11 +1,7 @@
-// GET /api/bermasalah
-// Ambil semua resi BERMASALAH dari akuisisi_orders + room_work.
-// Tidak perlu kirim resi list — langsung filter status='BERMASALAH' di server.
-// Paginate akuisisi_orders agar tidak ada yang terpotong (limit=1000/page).
+// GET  /api/bermasalah        — Ambil semua resi BERMASALAH dari akuisisi_orders + room_work
+// POST /api/bermasalah        — Update room_work dengan log foto CS (tidak balas / sudah balas)
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
-
   const AKUISISI_URL = process.env.AKUISISI_SUPABASE_URL;
   const AKUISISI_KEY = process.env.AKUISISI_SERVICE_KEY;
   if (!AKUISISI_URL || !AKUISISI_KEY) {
@@ -13,6 +9,36 @@ module.exports = async function handler(req, res) {
   }
 
   const headers = { apikey: AKUISISI_KEY, Authorization: `Bearer ${AKUISISI_KEY}` };
+
+  // ── POST: update room_work dengan log CS ─────────────────────────────────────
+  if (req.method === 'POST') {
+    const { resi, type, screenshot_url, cs_nama } = req.body || {};
+    if (!resi || !type || !screenshot_url) {
+      return res.status(400).json({ error: 'resi, type, screenshot_url wajib diisi' });
+    }
+    try {
+      const r = await fetch(
+        `${AKUISISI_URL}/rest/v1/room_work?resi=eq.${encodeURIComponent(resi)}`,
+        {
+          method: 'PATCH',
+          headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            cs_log_type:           type,
+            cs_log_screenshot_url: screenshot_url,
+            cs_log_at:             new Date().toISOString(),
+            cs_log_cs_nama:        cs_nama || null,
+          }),
+        }
+      );
+      if (!r.ok) return res.status(500).json({ error: await r.text() });
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── GET: ambil semua BERMASALAH ───────────────────────────────────────────────
+  if (req.method !== 'GET') return res.status(405).end();
 
   // 1. Ambil SEMUA resi BERMASALAH dari akuisisi_orders — paginate agar tidak terpotong
   let trackData = [];
