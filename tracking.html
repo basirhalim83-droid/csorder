@@ -1000,18 +1000,29 @@ function trOpenDetail(resi) {
   document.getElementById('tr-modal-title').textContent = row.nama || 'Detail Pengiriman';
   document.getElementById('tr-modal-sub').textContent = (row.resi ? row.resi + ' · ' : '') + eks + (row.cs_nama && row.cs_nama !== '—' ? ' · ' + row.cs_nama : '');
   const detail  = row.status_resi_detail || null;
-  const history = detail && Array.isArray(detail.history) ? detail.history.slice().reverse() : [];
+  // Support format Akuisisi (records) dan format lama (history)
+  const rawList = detail?.records || detail?.history || [];
+  const history = rawList.slice().reverse();
   const meta    = TR_STAGE_META[trEffectiveStage(row)];
   let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
   if (history.length) {
-    historyHtml = `<div style="margin-top:14px">${history.map((h,i) => `
+    historyHtml = `<div style="margin-top:14px">${history.map((h,i) => {
+      const desc = h.description || h.desc || h.content || h.content2 || '-';
+      const loc  = h.current_location || h.location_name || '';
+      const dateStr = h.date
+        ? h.date
+        : h.actual_time
+          ? new Date(h.actual_time * 1000).toLocaleString('id-ID', { timeZone:'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+          : '';
+      return `
       <div class="tr-history-item">
         <div class="tr-history-dot" style="background:${i===0 ? meta.color : 'var(--border-strong)'}"></div>
         <div>
-          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.desc || h.content || h.content2 || '-')}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${h.date || ''}${h.location_name ? ' · '+h.location_name : ''}</div>
+          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${desc}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${dateStr}${loc ? ' · '+loc : ''}</div>
         </div>
-      </div>`).join('')}</div>`;
+      </div>`;
+    }).join('')}</div>`;
   }
   const isBermasalah = trEffectiveStage(row) === 'BERMASALAH';
   document.getElementById('tr-modal-body').innerHTML = `
