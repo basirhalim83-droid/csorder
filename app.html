@@ -791,6 +791,56 @@ Keterangan: Bonus masker"></textarea>
   </div>
 </div>
 
+<!-- Modal Log Respon Customer (Bermasalah) -->
+<div class="tr-modal-overlay" id="bm-log-modal" style="display:none" onclick="if(event.target===this)bmCloseLogModal()">
+  <div class="tr-modal-box" style="max-width:420px">
+    <div class="tr-modal-head">
+      <div>
+        <div class="tr-modal-title" id="bm-log-modal-title">Respon Customer</div>
+        <div class="tr-modal-sub" id="bm-log-modal-sub"></div>
+      </div>
+      <button class="tr-modal-close" onclick="bmCloseLogModal()">✕</button>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <!-- Pilih tipe -->
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Status Customer</div>
+        <div style="display:flex;gap:8px">
+          <label class="bm-log-type-btn" id="bm-log-type-tidak">
+            <input type="radio" name="bm-log-type" value="tidak_balas" onchange="bmLogTypeChange(this)">
+            <span>📵 Tidak Balas</span>
+          </label>
+          <label class="bm-log-type-btn" id="bm-log-type-sudah">
+            <input type="radio" name="bm-log-type" value="sudah_balas" onchange="bmLogTypeChange(this)">
+            <span>💬 Sudah Balas</span>
+          </label>
+        </div>
+      </div>
+      <!-- Upload screenshot -->
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Screenshot Bukti <span style="color:var(--danger)">*</span></div>
+        <label id="bm-log-ss-label" style="display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--border);border-radius:var(--radius-lg);padding:20px;cursor:pointer;font-size:13px;color:var(--muted);transition:border-color .15s;min-height:80px" onclick="document.getElementById('bm-log-ss-input').click()">
+          📎 Klik untuk upload screenshot
+        </label>
+        <input type="file" id="bm-log-ss-input" accept="image/*" style="display:none" onchange="bmLogSsPreview(this)">
+        <div id="bm-log-ss-preview" style="display:none;margin-top:8px;position:relative">
+          <img id="bm-log-ss-img" style="width:100%;border-radius:8px;max-height:180px;object-fit:cover;cursor:pointer" onclick="bmLogSsFullView()" />
+          <button onclick="bmLogSsClear()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+        </div>
+      </div>
+      <!-- Catatan opsional -->
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Catatan <span style="font-weight:400;color:var(--muted)">(opsional)</span></div>
+        <textarea id="bm-log-catatan" rows="2" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:var(--sans);color:var(--text);background:var(--bg);resize:none;box-sizing:border-box" placeholder="Misal: sudah dicoba 3x tidak ada respons..."></textarea>
+      </div>
+    </div>
+    <div class="tr-modal-actions">
+      <button class="btn-secondary" onclick="bmCloseLogModal()">Batal</button>
+      <button class="btn-primary" id="bm-log-save-btn" onclick="bmSaveLog()" style="width:auto;padding:10px 20px">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/app.js"></script>
 </body>
 </html>
