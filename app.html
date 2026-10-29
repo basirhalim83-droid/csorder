@@ -39,6 +39,9 @@
     <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
       <span class="nav-icon">📦</span> Tracking Order
     </div>
+    <div class="nav-item" id="nav-bermasalah" onclick="switchPage('bermasalah')">
+      <span class="nav-icon">⚠️</span> Resi Bermasalah
+    </div>
     <div class="nav-item" id="nav-ongkir" onclick="switchPage('ongkir')">
       <span class="nav-icon">🚚</span> Cek Ongkir
     </div>
@@ -568,6 +571,41 @@ Keterangan: Bonus masker"></textarea>
   </div>
 
   <!-- ══════════════════════════════════════
+       PAGE: RESI BERMASALAH
+  ═══════════════════════════════════════ -->
+  <div class="page" id="page-bermasalah">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Resi Bermasalah</div>
+        <div class="page-sub" style="margin:0">Orderan kamu yang undell / gagal kirim</div>
+      </div>
+      <button onclick="loadBermasalah()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text)">🔄 Refresh</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <select id="bm-filter-eks" onchange="applyBmFilter()"
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:120px">
+        <option value="">Semua Ekspedisi</option>
+        <option>JNE</option><option>J&T</option><option>SICEPAT</option>
+        <option>ANTERAJA</option><option>NINJA</option><option>SAP</option>
+        <option>LION</option><option>POS</option><option>IDEXPRESS</option><option>SPX</option>
+      </select>
+      <input id="bm-search" oninput="applyBmFilter()" placeholder="Cari nama / resi / HP..."
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:2;min-width:160px">
+    </div>
+
+    <!-- Sub-filter FU -->
+    <div id="bm-followup-stats" style="display:none;margin-bottom:12px"></div>
+
+    <!-- Info -->
+    <div id="bm-info" style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:var(--mono)"></div>
+
+    <!-- Cards -->
+    <div id="bm-cards" class="trk-cards"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════
        PAGE: CEK ONGKIR
   ═══════════════════════════════════════ -->
   <div class="page" id="page-ongkir">
@@ -649,6 +687,17 @@ Keterangan: Bonus masker"></textarea>
         </svg>
       </div>
       <span class="bnav-label">Tracking</span>
+    </button>
+
+    <button class="bnav-item" id="bnav-bermasalah" onclick="switchPage('bermasalah')">
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <span class="bnav-label">Undell</span>
     </button>
 
     <button class="bnav-item" id="bnav-ongkir" onclick="switchPage('ongkir')">
