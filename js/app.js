@@ -3055,6 +3055,17 @@ let bmFollowupFilter = null;
 
 async function loadBermasalah() {
   if (!currentUser) return;
+
+  // Set default bulan ini kalau belum dipilih
+  const monthEl = document.getElementById('bm-filter-month');
+  if (monthEl && !monthEl.value) {
+    const now = new Date();
+    monthEl.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [year, month] = (monthEl?.value || '').split('-');
+  const dateFrom = `${year}-${month}-01`;
+  const dateTo   = new Date(year, month, 0).toISOString().slice(0, 10); // hari terakhir bulan
+
   const cardsEl = document.getElementById('bm-cards');
   const infoEl  = document.getElementById('bm-info');
   if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
@@ -3062,20 +3073,19 @@ async function loadBermasalah() {
   document.getElementById('bm-followup-stats').style.display = 'none';
 
   try {
-    // Ambil orderan_masuk CS ini — 90 hari terakhir agar tangkap semua yang masih aktif bermasalah
-    const dateFrom = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
     const { data: masukData, error: masukErr } = await sb
       .from('orderan_masuk')
       .select('hp, nama, tanggal')
       .eq('cs_id', currentUser.id)
-      .gte('tanggal', dateFrom);
+      .gte('tanggal', dateFrom)
+      .lte('tanggal', dateTo);
     if (masukErr) throw masukErr;
     if (!masukData?.length) {
-      cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Belum ada orderan dalam 90 hari terakhir.</div>';
+      cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di bulan ini.</div>';
       return;
     }
 
-    const range = { start: dateFrom, end: todayStr() };
+    const range = { start: dateFrom, end: dateTo };
     const rows  = await trFetchTrackingRows(masukData, range);
 
     // Filter hanya BERMASALAH
