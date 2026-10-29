@@ -3538,7 +3538,7 @@ function trOpenDetail(resi) {
   const detail  = row.status_resi_detail || null;
   // Support format Akuisisi (records) dan format lama (history)
   const rawList = detail?.records || detail?.history || [];
-  const history = rawList.slice().reverse();
+  const history = rawList.slice();
   const meta    = TR_STAGE_META[trEffectiveStage(row)];
   let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
   if (history.length) {
