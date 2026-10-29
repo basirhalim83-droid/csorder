@@ -2934,23 +2934,24 @@ function trOpenDetail(resi) {
           <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.description || h.desc || h.content || h.content2 || '-')}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${
             h.date || (h.actual_time ? new Date(h.actual_time*1000).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '')
-          }${(h.current_location||h.location_name) ? ' · '+(h.current_location||h.location_name) : ''}</div>
+          }${(() => { const loc = typeof h.current_location === 'string' ? h.current_location : (typeof h.location_name === 'string' ? h.location_name : ''); return loc ? ' · ' + loc : ''; })()}</div>
         </div>
       </div>`).join('')}</div>`;
   }
 
   const isBermasalah = trEffectiveStage(row) === 'BERMASALAH';
+  const hubungiBtn   = (isBermasalah && row.hp)
+    ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:10px;text-decoration:none;margin-top:10px;width:100%;box-sizing:border-box">📞 Hubungi Customer</a>`
+    : '';
   document.getElementById('tr-modal-body').innerHTML = `
     <div style="margin-top:10px">${trBadgeHtml(row)}</div>
     ${trStepperHtml(row)}
+    ${hubungiBtn}
     ${historyHtml}
   `;
   const actionsEl = document.getElementById('tr-modal-actions');
   if (actionsEl) {
-    actionsEl.innerHTML = `
-      <button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>
-      ${(isBermasalah && row.hp) ? `<a href="${trBuildWaUrl(row)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;text-decoration:none">📞 Hubungi Customer</a>` : ''}
-    `;
+    actionsEl.innerHTML = `<button class="btn-secondary" onclick="trManualCheckFromModal()">🔄 Cek Ulang</button>`;
   }
   document.getElementById('tr-modal').style.display = 'flex';
 }
