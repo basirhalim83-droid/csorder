@@ -492,6 +492,22 @@ tr.row-rts{background:var(--warn-light)!important}
 .trk-card-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .trk-card-meta span{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;white-space:nowrap}
 
+/* ── BM LOG: Tombol + Badge Respon Customer ── */
+.bm-log-actions{display:flex;gap:6px;margin-top:8px}
+.bm-log-btn{flex:1;border:none;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:opacity .15s;white-space:nowrap}
+.bm-log-btn:hover{opacity:.8}
+.bm-log-btn-tidak{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5}
+.bm-log-btn-sudah{background:#f0fdf4;color:#16a34a;border:1px solid #86efac}
+.bm-log-badge{display:flex;align-items:center;gap:6px;margin-top:8px;padding:7px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer}
+.bm-log-badge-tidak{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5}
+.bm-log-badge-sudah{background:#f0fdf4;color:#16a34a;border:1px solid #86efac}
+.bm-log-badge img{width:32px;height:32px;border-radius:4px;object-fit:cover;flex-shrink:0}
+/* Radio type button di modal */
+.bm-log-type-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:2px solid var(--border);border-radius:10px;padding:10px 8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);transition:all .15s;user-select:none}
+.bm-log-type-btn input{display:none}
+.bm-log-type-btn.selected-tidak{border-color:#dc2626;background:#fef2f2;color:#dc2626}
+.bm-log-type-btn.selected-sudah{border-color:#16a34a;background:#f0fdf4;color:#16a34a}
+
 /* ── SS BUKTI ── */
 .btn-ss{font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;border:none;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:opacity .15s}
 .btn-ss:hover{opacity:0.8}
