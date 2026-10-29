@@ -2918,7 +2918,7 @@ function trOpenDetail(resi) {
   document.getElementById('tr-modal-sub').textContent = (row.resi ? row.resi + ' · ' : '') + eks;
 
   const detail  = row.status_resi_detail || null;
-  const history = detail && Array.isArray(detail.history) ? detail.history.slice().reverse() : [];
+  const history = detail && Array.isArray(detail.history) ? detail.history.slice() : [];
   const meta    = TR_STAGE_META[trEffectiveStage(row)];
 
   let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
