@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
       try {
         const r = await fetch(
           `${AKUISISI_URL}/rest/v1/room_work`
-          + `?select=resi,fu_count,fu_info_at,fu_1_at,fu_2_at,fu_3_at,cs_responded,cs_responded_at,lapor_ekspedisi,lapor_ekspedisi_at`
+          + `?select=resi,order_date,cs_nama,nama_pembeli,hp_pembeli,kota_tujuan,ekspedisi,produk,case_undel,fu_count,fu_info_at,fu_1_at,fu_2_at,fu_3_at,cs_responded,cs_responded_at,lapor_ekspedisi,lapor_ekspedisi_at`
           + `&resi=in.(${inFilter})`,
           { headers }
         );
