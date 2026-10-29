@@ -2913,12 +2913,14 @@ function trOpenDetail(resi) {
   if (!row) return;
   trModalResi = resi;
 
-  const eks = extractEkspedisi(row.pembayaran) || row.pembayaran || '';
+  const eks = row.ekspedisi || extractEkspedisi(row.pembayaran) || row.pembayaran || '';
   document.getElementById('tr-modal-title').textContent = row.nama || 'Detail Pengiriman';
   document.getElementById('tr-modal-sub').textContent = (row.resi ? row.resi + ' · ' : '') + eks;
 
   const detail  = row.status_resi_detail || null;
-  const history = detail && Array.isArray(detail.history) ? detail.history.slice() : [];
+  // Support format Akuisisi (records) dan format lama (history)
+  const rawList = detail?.records || detail?.history || [];
+  const history = Array.isArray(rawList) ? rawList.slice() : [];
   const meta    = TR_STAGE_META[trEffectiveStage(row)];
 
   let historyHtml = '<div style="font-size:12px;color:var(--muted);margin-top:12px">Belum ada history — klik "Cek Ulang".</div>';
@@ -2927,8 +2929,10 @@ function trOpenDetail(resi) {
       <div class="tr-history-item">
         <div class="tr-history-dot" style="background:${i===0 ? meta.color : 'var(--border-strong)'}"></div>
         <div>
-          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.desc || h.content || h.content2 || '-')}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${h.date || ''}${h.location_name ? ' · '+h.location_name : ''}</div>
+          <div style="font-size:12.5px;${i===0?'font-weight:700':''}">${(h.description || h.desc || h.content || h.content2 || '-')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${
+            h.date || (h.actual_time ? new Date(h.actual_time*1000).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '')
+          }${(h.current_location||h.location_name) ? ' · '+(h.current_location||h.location_name) : ''}</div>
         </div>
       </div>`).join('')}</div>`;
   }
