@@ -2711,17 +2711,19 @@ async function trFetchTrackingRows(masukList, range) {
     });
   }
 
-  // 4. Merge status tracking dari cs_order_tracking, keyed by resi
+  // 4. Merge status tracking dari Akuisisi Tracking Supabase (via webhook Mengantar)
   const resiList = [...new Set(filtered.map(r => (r.resi || '').trim()).filter(Boolean))];
   let trkByResi = {};
   if (resiList.length) {
-    const RESI_CHUNK = 500;
-    for (let i = 0; i < resiList.length; i += RESI_CHUNK) {
-      const { data: trkData } = await sb.from('cs_order_tracking')
-        .select('resi, ekspedisi, status_resi, status_resi_step, status_resi_updated_at, status_resi_detail')
-        .in('resi', resiList.slice(i, i + RESI_CHUNK));
+    try {
+      const resp = await fetch('/api/tracking-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resi: resiList })
+      });
+      const trkData = resp.ok ? await resp.json() : [];
       (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
-    }
+    } catch (_) {}
   }
   filtered.forEach(r => {
     const t = r.resi ? trkByResi[r.resi.trim()] : null;
@@ -2954,14 +2956,8 @@ function trCloseModal() {
 }
 
 async function trSaveTracking(resi, ekspedisi, result) {
-  await sb.from('cs_order_tracking').upsert({
-    resi,
-    ekspedisi,
-    status_resi: result.stage,
-    status_resi_step: result.step,
-    status_resi_updated_at: new Date().toISOString(),
-    status_resi_detail: result.detail
-  }, { onConflict: 'resi' });
+  // Status tracking dikelola oleh webhook Mengantar di Akuisisi Tracking.
+  // Hasil cek manual hanya dipakai untuk update tampilan saat itu — tidak disimpan ke DB.
 }
 
 async function trManualCheckFromModal() {
