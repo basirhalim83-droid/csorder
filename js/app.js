@@ -2424,17 +2424,19 @@ async function loadWaTemplate() {
 function extractMasalah(row) {
   const detail = row.status_resi_detail;
   if (!detail) return 'Kendala pengiriman';
-  const history = Array.isArray(detail.history) ? [...detail.history].reverse() : [];
+  // Support format Akuisisi (records) dan format lama (history)
+  const rawList = detail.records || detail.history || [];
+  const history = Array.isArray(rawList) ? rawList.slice() : [];
   const PROBLEM = /gagal|kendala|bermasalah|tidak ditemukan|alamat tidak|tidak ada orang|tidak ditempat|tidak dihuni|menunggu konfirmasi|disimpan di gudang|ditolak|pindah alamat/i;
   for (const h of history) {
-    const desc = (h.desc || h.content || '').trim();
+    const desc = (h.description || h.desc || h.content || '').trim();
     if (!desc) continue;
     const group = (h.type && h.type.group) || '';
     const tag   = (h.type && h.type.tag)   || '';
     if (group === 'UNDELIVERED' || tag === 'actionRequired' || PROBLEM.test(desc)) return desc;
   }
   const latest = history[0];
-  return (latest && (latest.desc || latest.content || '').trim()) || 'Kendala pengiriman';
+  return (latest && (latest.description || latest.desc || latest.content || '').trim()) || 'Kendala pengiriman';
 }
 
 function trBuildWaUrl(row) {
