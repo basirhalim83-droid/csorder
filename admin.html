@@ -1256,60 +1256,51 @@ async function loadAdminBermasalah() {
   document.getElementById('abm-followup-stats').style.display = 'none';
 
   try {
-    // Ambil semua orderan bulan ini langsung dari all_orderan (admin punya akses semua CS)
-    const PAGE = 1000;
-    let allOrders = [], offset = 0;
-    while (true) {
-      const { data, error } = await sb.from('all_orderan')
-        .select('tanggal,nama,hp,jumlah,pembayaran,resi,kabupaten,cs')
-        .eq('sumber', 'cs_input')
-        .gte('tanggal', dateFrom)
-        .lte('tanggal', dateTo)
-        .order('tanggal', { ascending: false })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      allOrders = allOrders.concat(data || []);
-      if ((data || []).length < PAGE) break;
-      offset += PAGE;
-    }
+    // 1. Ambil semua BERMASALAH dari Akuisisi (cepat — set kecil)
+    const bmResp = await fetch('/api/bermasalah');
+    if (!bmResp.ok) throw new Error('Gagal fetch /api/bermasalah');
+    const bmData = await bmResp.json(); // [{resi, status_resi, _rw, ...}]
 
-    if (!allOrders.length) {
-      cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di bulan ini.</div>';
+    if (!bmData.length) {
+      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada resi bermasalah.</div>';
+      if (infoEl) infoEl.textContent = '0 resi bermasalah';
       return;
     }
 
-    // Ambil status tracking dari Akuisisi
-    const resiList = [...new Set(allOrders.map(r => (r.resi||'').trim()).filter(Boolean))];
-    let trkByResi = {};
-    if (resiList.length) {
-      try {
-        const resp = await fetch('/api/tracking-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resi: resiList })
-        });
-        const trkData = resp.ok ? await resp.json() : [];
-        (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
-      } catch(_) {}
+    // Build lookup tracking
+    const trkByResi = {};
+    bmData.forEach(t => { trkByResi[t.resi] = t; });
+
+    // 2. Ambil detail order hanya untuk resi BERMASALAH, filter bulan
+    const resiList = bmData.map(t => t.resi).filter(Boolean);
+    const CHUNK = 200;
+    let allOrders = [];
+    for (let i = 0; i < resiList.length; i += CHUNK) {
+      const chunk = resiList.slice(i, i + CHUNK);
+      const { data, error } = await sb.from('all_orderan')
+        .select('tanggal,nama,hp,jumlah,pembayaran,resi,kabupaten,cs')
+        .eq('sumber', 'cs_input')
+        .in('resi', chunk)
+        .gte('tanggal', dateFrom)
+        .lte('tanggal', dateTo);
+      if (error) throw error;
+      allOrders = allOrders.concat(data || []);
     }
 
-    // Merge & filter BERMASALAH
-    const rows = allOrders.map(r => {
+    // 3. Merge tracking ke order detail
+    abmAllData = allOrders.map(r => {
       const resi = (r.resi || '').trim();
-      const t    = resi ? trkByResi[resi] : null;
+      const t = trkByResi[resi];
       return {
-        ...r,
-        resi,
-        cs_nama:             r.cs || '—',
-        status_resi:         t?.status_resi         || null,
-        status_resi_step:    t?.status_resi_step     || null,
+        ...r, resi,
+        cs_nama:                r.cs                     || '—',
+        status_resi:            t?.status_resi            || null,
+        status_resi_step:       t?.status_resi_step       || null,
         status_resi_updated_at: t?.status_resi_updated_at || null,
-        status_resi_detail:  t?.status_resi_detail   || null,
-        _rw:                 t?._rw                  || null,
+        status_resi_detail:     t?.status_resi_detail     || null,
+        _rw:                    t?._rw                    || null,
       };
     });
-
-    abmAllData = rows.filter(r => r.status_resi === 'BERMASALAH');
 
     // Populate CS filter dropdown
     const csNames = [...new Set(abmAllData.map(r => r.cs_nama).filter(n => n && n !== '—'))].sort();
@@ -1320,7 +1311,7 @@ async function loadAdminBermasalah() {
         csNames.map(n => `<option value="${n}" ${n===prevCs?'selected':''}>${n}</option>`).join('');
     }
 
-    if (infoEl) infoEl.textContent = `${abmAllData.length} resi bermasalah dari ${rows.length} total order`;
+    if (infoEl) infoEl.textContent = `${abmAllData.length} resi bermasalah`;
     abmRenderFollowupStats(abmAllData);
     applyAbmFilter();
   } catch(e) {
