@@ -1236,8 +1236,28 @@ function resetTemplate() {
 
 // ── RESI BERMASALAH (ADMIN) ───────────────────────────────────────────────────
 
-let abmAllData       = [];
+let abmAllData        = [];
 let abmFollowupFilter = null;
+let abmLogMap         = {};  // { resi: log_row }
+
+async function loadAbmLogs(resiList) {
+  abmLogMap = {};
+  if (!resiList.length) return;
+  const CHUNK = 500;
+  for (let i = 0; i < resiList.length; i += CHUNK) {
+    const chunk = resiList.slice(i, i + CHUNK);
+    try {
+      const { data } = await sbSS
+        .from('bermasalah_cs_log')
+        .select('resi,type,screenshot_url,catatan,created_at,cs_nama')
+        .in('resi', chunk)
+        .order('created_at', { ascending: false });
+      (data || []).forEach(row => {
+        if (!abmLogMap[row.resi]) abmLogMap[row.resi] = row;
+      });
+    } catch(_) {}
+  }
+}
 
 async function loadAdminBermasalah() {
   const monthEl = document.getElementById('abm-filter-month');
@@ -1297,6 +1317,9 @@ async function loadAdminBermasalah() {
       csSel.innerHTML = '<option value="">Semua CS</option>' +
         csNames.map(n => `<option value="${n}" ${n===prevCs?'selected':''}>${n}</option>`).join('');
     }
+
+    // Load log respon customer dari CS
+    await loadAbmLogs(abmAllData.map(r => r.resi));
 
     if (infoEl) infoEl.textContent = `${abmAllData.length} resi bermasalah`;
     abmRenderFollowupStats(abmAllData);
@@ -1365,11 +1388,43 @@ function renderAbmCards(list) {
     return;
   }
   cardsEl.innerHTML = list.map(r => {
-    const eks     = r.ekspedisi || '—';
-    const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0'+r.hp) : '—';
-    const fuBadge = trFollowupBadge(r);
+    const eks      = r.ekspedisi || '—';
+    const hp08     = r.hp ? (r.hp.startsWith('0') ? r.hp : '0'+r.hp) : '—';
+    const fuBadge  = trFollowupBadge(r);
+    const log      = abmLogMap[r.resi];
+    const resiSafe = (r.resi || '').replace(/'/g, "\\'");
+
+    let logHtml = '';
+    if (log) {
+      const isTidak = log.type === 'tidak_balas';
+      const cls     = isTidak ? 'bm-log-badge-tidak' : 'bm-log-badge-sudah';
+      const icon    = isTidak ? '📵' : '💬';
+      const label   = isTidak ? 'Tidak Balas' : 'Sudah Balas';
+      const ts      = log.created_at
+        ? new Date(log.created_at).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+        : '';
+      const byCs    = log.cs_nama ? ` · ${log.cs_nama}` : '';
+      const thumb   = log.screenshot_url
+        ? `<img src="${log.screenshot_url}" style="width:36px;height:36px;border-radius:5px;object-fit:cover;flex-shrink:0;cursor:pointer" onclick="event.stopPropagation();window.open('${log.screenshot_url}','_blank')" />`
+        : '';
+      const catatan = log.catatan ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">"${log.catatan}"</div>` : '';
+      logHtml = `
+        <div class="bm-log-badge ${cls}" style="cursor:default;flex-direction:column;align-items:flex-start;gap:4px" onclick="event.stopPropagation()">
+          <div style="display:flex;align-items:center;gap:6px;width:100%">
+            ${thumb}
+            <div>
+              <div style="font-weight:700">${icon} ${label}${byCs}</div>
+              <div style="font-size:10px;font-weight:400;opacity:.75">${ts}</div>
+            </div>
+          </div>
+          ${catatan}
+        </div>`;
+    } else {
+      logHtml = `<div style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic">Belum ada respon dari CS</div>`;
+    }
+
     return `
-    <div class="trk-card" onclick="trOpenDetail('${r.resi||''}')">
+    <div class="trk-card" onclick="trOpenDetail('${resiSafe}')">
       <div class="trk-card-top">
         <div>
           <div class="trk-card-name">${r.nama||'—'}</div>
@@ -1385,6 +1440,7 @@ function renderAbmCards(list) {
         <span>👤 ${r.cs_nama||'—'}</span>
       </div>
       ${fuBadge ? `<div style="margin-top:6px">${fuBadge}</div>` : ''}
+      ${logHtml}
     </div>`;
   }).join('');
 }
