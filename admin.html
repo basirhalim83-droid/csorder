@@ -112,6 +112,9 @@
       Analisis Produk
     </div>
 
+    <div class="nav-item" id="nav-bermasalah" onclick="switchPage('bermasalah')">
+      <span class="nav-icon">⚠️</span> Resi Bermasalah
+    </div>
     <div class="nav-item" id="nav-tracking" onclick="switchPage('tracking')">
       <span class="nav-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -829,6 +832,45 @@
   </div>
 
   <!-- ══ PAGE: TRACKING ORDER CS ══ -->
+  <!-- ══ PAGE: RESI BERMASALAH ══ -->
+  <div id="page-bermasalah" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Resi Bermasalah</div>
+        <div class="page-sub" style="margin:0">Semua resi undell / gagal kirim per CS</div>
+      </div>
+      <button onclick="loadAdminBermasalah()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text)">🔄 Refresh</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <input type="month" id="abm-filter-month" onchange="loadAdminBermasalah()"
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:140px">
+      <select id="abm-filter-cs" onchange="applyAbmFilter()"
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:130px">
+        <option value="">Semua CS</option>
+      </select>
+      <select id="abm-filter-eks" onchange="applyAbmFilter()"
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:120px">
+        <option value="">Semua Ekspedisi</option>
+        <option>JNE</option><option>J&T</option><option>SICEPAT</option>
+        <option>ANTERAJA</option><option>NINJA</option><option>SAP</option>
+        <option>LION</option><option>POS</option><option>IDEXPRESS</option><option>SPX</option>
+      </select>
+      <input id="abm-search" oninput="applyAbmFilter()" placeholder="Cari nama / resi / HP..."
+        style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:2;min-width:160px">
+    </div>
+
+    <!-- Sub-filter FU -->
+    <div id="abm-followup-stats" style="display:none;margin-bottom:12px"></div>
+
+    <!-- Info -->
+    <div id="abm-info" style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:var(--mono)"></div>
+
+    <!-- Cards -->
+    <div id="abm-cards" class="trk-cards"></div>
+  </div>
+
   <div id="page-tracking" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
       <div>
@@ -1192,14 +1234,191 @@ function resetTemplate() {
   if (ta) ta.value = WA_TEMPLATE_DEFAULT;
 }
 
+// ── RESI BERMASALAH (ADMIN) ───────────────────────────────────────────────────
+
+let abmAllData       = [];
+let abmFollowupFilter = null;
+
+async function loadAdminBermasalah() {
+  const monthEl = document.getElementById('abm-filter-month');
+  if (monthEl && !monthEl.value) {
+    const now = new Date();
+    monthEl.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [year, month] = (monthEl?.value || '').split('-');
+  const dateFrom = `${year}-${month}-01`;
+  const dateTo   = new Date(year, month, 0).toISOString().slice(0,10);
+
+  const cardsEl = document.getElementById('abm-cards');
+  const infoEl  = document.getElementById('abm-info');
+  if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Memuat data...</div>';
+  if (infoEl)  infoEl.textContent = '';
+  document.getElementById('abm-followup-stats').style.display = 'none';
+
+  try {
+    // Ambil semua orderan bulan ini langsung dari all_orderan (admin punya akses semua CS)
+    const PAGE = 1000;
+    let allOrders = [], offset = 0;
+    while (true) {
+      const { data, error } = await sb.from('all_orderan')
+        .select('tanggal,nama,hp,jumlah,pembayaran,resi,kabupaten,cs')
+        .eq('sumber', 'cs_input')
+        .gte('tanggal', dateFrom)
+        .lte('tanggal', dateTo)
+        .order('tanggal', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      allOrders = allOrders.concat(data || []);
+      if ((data || []).length < PAGE) break;
+      offset += PAGE;
+    }
+
+    if (!allOrders.length) {
+      cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di bulan ini.</div>';
+      return;
+    }
+
+    // Ambil status tracking dari Akuisisi
+    const resiList = [...new Set(allOrders.map(r => (r.resi||'').trim()).filter(Boolean))];
+    let trkByResi = {};
+    if (resiList.length) {
+      try {
+        const resp = await fetch('/api/tracking-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resi: resiList })
+        });
+        const trkData = resp.ok ? await resp.json() : [];
+        (trkData || []).forEach(t => { trkByResi[t.resi] = t; });
+      } catch(_) {}
+    }
+
+    // Merge & filter BERMASALAH
+    const rows = allOrders.map(r => {
+      const resi = (r.resi || '').trim();
+      const t    = resi ? trkByResi[resi] : null;
+      return {
+        ...r,
+        resi,
+        cs_nama:             r.cs || '—',
+        status_resi:         t?.status_resi         || null,
+        status_resi_step:    t?.status_resi_step     || null,
+        status_resi_updated_at: t?.status_resi_updated_at || null,
+        status_resi_detail:  t?.status_resi_detail   || null,
+        _rw:                 t?._rw                  || null,
+      };
+    });
+
+    abmAllData = rows.filter(r => r.status_resi === 'BERMASALAH');
+
+    // Populate CS filter dropdown
+    const csNames = [...new Set(abmAllData.map(r => r.cs_nama).filter(n => n && n !== '—'))].sort();
+    const csSel = document.getElementById('abm-filter-cs');
+    const prevCs = csSel?.value || '';
+    if (csSel) {
+      csSel.innerHTML = '<option value="">Semua CS</option>' +
+        csNames.map(n => `<option value="${n}" ${n===prevCs?'selected':''}>${n}</option>`).join('');
+    }
+
+    if (infoEl) infoEl.textContent = `${abmAllData.length} resi bermasalah dari ${rows.length} total order`;
+    abmRenderFollowupStats(abmAllData);
+    applyAbmFilter();
+  } catch(e) {
+    if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Gagal memuat data.</div>';
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+function abmRenderFollowupStats(list) {
+  const wrap = document.getElementById('abm-followup-stats');
+  if (!wrap || !list.length) { if(wrap) wrap.style.display='none'; return; }
+  const counts = {};
+  FOLLOWUP_STAT_META.forEach(m => counts[m.key] = 0);
+  list.forEach(r => counts[trFollowupLevel(r)]++);
+  wrap.style.display = 'grid';
+  wrap.style.gridTemplateColumns = 'repeat(auto-fit,minmax(90px,1fr))';
+  wrap.style.gap = '6px';
+  wrap.innerHTML = FOLLOWUP_STAT_META.map(m => {
+    const active = abmFollowupFilter === m.key;
+    return `<div onclick="abmSetFollowupFilter('${m.key}')"
+      style="background:${active?m.color:'var(--surface)'};border:1.5px solid ${active?m.color:'var(--border)'};
+             border-radius:var(--radius);padding:8px 10px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)">
+      <div style="font-size:9px;color:${active?'rgba(255,255,255,.75)':'var(--muted)'};text-transform:uppercase;
+                  letter-spacing:.4px;font-family:var(--mono);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.label}</div>
+      <div style="font-size:18px;font-weight:700;color:${active?'#fff':m.color};line-height:1">${counts[m.key]||'—'}</div>
+    </div>`;
+  }).join('');
+}
+
+function abmSetFollowupFilter(key) {
+  abmFollowupFilter = abmFollowupFilter === key ? null : key;
+  abmRenderFollowupStats(abmAllData);
+  applyAbmFilter();
+}
+
+function applyAbmFilter() {
+  const csF    = document.getElementById('abm-filter-cs')?.value  || '';
+  const eksF   = document.getElementById('abm-filter-eks')?.value || '';
+  const search = (document.getElementById('abm-search')?.value || '').toLowerCase();
+
+  let filtered = abmAllData.slice();
+  if (csF)    filtered = filtered.filter(r => r.cs_nama === csF);
+  if (eksF)   filtered = filtered.filter(r => (extractEkspedisi(r.pembayaran)||'') === eksF);
+  if (search) filtered = filtered.filter(r =>
+    (r.nama    ||'').toLowerCase().includes(search) ||
+    (r.hp      ||'').includes(search)               ||
+    (r.resi    ||'').toLowerCase().includes(search)
+  );
+  if (abmFollowupFilter) filtered = filtered.filter(r => trFollowupLevel(r) === abmFollowupFilter);
+
+  trkAllData = abmAllData; // supaya modal trOpenDetail bisa lookup
+  renderAbmCards(filtered);
+  document.getElementById('abm-info').textContent =
+    filtered.length < abmAllData.length
+      ? `${filtered.length} dari ${abmAllData.length} resi bermasalah`
+      : `${abmAllData.length} resi bermasalah`;
+}
+
+function renderAbmCards(list) {
+  const cardsEl = document.getElementById('abm-cards');
+  if (!cardsEl) return;
+  if (!list.length) {
+    cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada resi bermasalah.</div>';
+    return;
+  }
+  cardsEl.innerHTML = list.map(r => {
+    const eks     = extractEkspedisi(r.pembayaran) || r.pembayaran || '—';
+    const hp08    = r.hp ? (r.hp.startsWith('0') ? r.hp : '0'+r.hp) : '—';
+    const fuBadge = trFollowupBadge(r);
+    return `
+    <div class="trk-card" onclick="trOpenDetail('${r.resi||''}')">
+      <div class="trk-card-top">
+        <div>
+          <div class="trk-card-name">${r.nama||'—'}</div>
+          <div class="trk-card-sub">${hp08}</div>
+        </div>
+        <div class="trk-card-stage" style="background:var(--danger-light);color:var(--danger)">⚠️ Bermasalah</div>
+      </div>
+      <div class="trk-card-meta">
+        <span>📦 ${r.resi||'Belum ada resi'}</span>
+        <span>🚚 ${eks}</span>
+        ${r.kabupaten ? `<span>📍 ${r.kabupaten}</span>` : ''}
+        <span>📅 ${r.tanggal||''}</span>
+        <span>👤 ${r.cs_nama||'—'}</span>
+      </div>
+      ${fuBadge ? `<div style="margin-top:6px">${fuBadge}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['overview','dashboard','rekap','analisis','produk','users','fonnte','sku','tracking','wilayahbaru','template','gudang'].forEach(p => {
+  ['overview','dashboard','rekap','analisis','produk','bermasalah','users','fonnte','sku','tracking','wilayahbaru','template','gudang'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const nav = document.getElementById('nav-'+p);
     if (nav) nav.classList.toggle('active', p===name);
   });
-  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', produk:'Analisis Produk', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA', gudang:'Gudang' };
+  const titles = { overview:'Overview', dashboard:'Dashboard Orderan', rekap:'Rekap CS', analisis:'Analisis Pembayaran', produk:'Analisis Produk', bermasalah:'Resi Bermasalah', users:'Users', fonnte:'Fonnte / WA Sender', sku:'SKU Produk', tracking:'Tracking Order CS', wilayahbaru:'Wilayah Baru', template:'Template WA', gudang:'Gudang' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard') {
     // Init drp ke hari ini kalau belum pernah dipilih
@@ -1210,16 +1429,17 @@ function switchPage(name) {
     }
     loadAdminDash();
   }
-  if (name === 'rekap')       loadRekap();
-  if (name === 'analisis')    loadAnalisis();
-  if (name === 'produk')      loadProduk();
-  if (name === 'users')       loadUsers();
-  if (name === 'fonnte')      loadFonnte();
-  if (name === 'sku')         loadSku();
-  if (name === 'tracking')    loadTracking();
-  if (name === 'wilayahbaru') loadWilayahBaru();
-  if (name === 'template')    loadTemplate();
-  if (name === 'gudang')      loadGudangAdmin();
+  if (name === 'rekap')        loadRekap();
+  if (name === 'analisis')     loadAnalisis();
+  if (name === 'produk')       loadProduk();
+  if (name === 'bermasalah')   loadAdminBermasalah();
+  if (name === 'users')        loadUsers();
+  if (name === 'fonnte')       loadFonnte();
+  if (name === 'sku')          loadSku();
+  if (name === 'tracking')     loadTracking();
+  if (name === 'wilayahbaru')  loadWilayahBaru();
+  if (name === 'template')     loadTemplate();
+  if (name === 'gudang')       loadGudangAdmin();
 }
 
 // ══ WILAYAH BARU ═════════════════════════════════════════════════════════════
