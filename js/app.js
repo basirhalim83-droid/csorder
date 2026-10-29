@@ -3064,7 +3064,7 @@ async function loadBermasalah() {
   }
   const [year, month] = (monthEl?.value || '').split('-');
   const dateFrom = `${year}-${month}-01`;
-  const dateTo   = new Date(year, month, 0).toISOString().slice(0, 10); // hari terakhir bulan
+  const dateTo   = new Date(year, month, 0).toISOString().slice(0, 10);
 
   const cardsEl = document.getElementById('bm-cards');
   const infoEl  = document.getElementById('bm-info');
@@ -3073,25 +3073,53 @@ async function loadBermasalah() {
   document.getElementById('bm-followup-stats').style.display = 'none';
 
   try {
-    const { data: masukData, error: masukErr } = await sb
-      .from('orderan_masuk')
-      .select('hp, nama, tanggal')
-      .eq('cs_id', currentUser.id)
-      .gte('tanggal', dateFrom)
-      .lte('tanggal', dateTo);
-    if (masukErr) throw masukErr;
-    if (!masukData?.length) {
-      cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada orderan di bulan ini.</div>';
+    // 1. Ambil semua BERMASALAH dari Akuisisi (cepat — set kecil)
+    const bmResp = await fetch('/api/bermasalah');
+    if (!bmResp.ok) throw new Error('Gagal fetch /api/bermasalah');
+    const bmData = await bmResp.json(); // [{resi, status_resi, _rw, ...}]
+
+    if (!bmData.length) {
+      if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;grid-column:1/-1">Tidak ada resi bermasalah.</div>';
+      if (infoEl) infoEl.textContent = '0 resi bermasalah';
       return;
     }
 
-    const range = { start: dateFrom, end: dateTo };
-    const rows  = await trFetchTrackingRows(masukData, range);
+    // Build lookup tracking
+    const trkByResi = {};
+    bmData.forEach(t => { trkByResi[t.resi] = t; });
 
-    // Filter hanya BERMASALAH
-    bmAllData = rows.filter(r => trEffectiveStage(r) === 'BERMASALAH');
+    // 2. Ambil detail order hanya untuk resi BERMASALAH ini, filter bulan + CS
+    const resiList = bmData.map(t => t.resi).filter(Boolean);
+    const CHUNK = 200;
+    let allOrders = [];
+    for (let i = 0; i < resiList.length; i += CHUNK) {
+      const chunk = resiList.slice(i, i + CHUNK);
+      const { data, error } = await sb.from('all_orderan')
+        .select('tanggal,nama,hp,jumlah,pembayaran,resi,kabupaten')
+        .eq('sumber', 'cs_input')
+        .eq('cs', currentProfile.nama)
+        .in('resi', chunk)
+        .gte('tanggal', dateFrom)
+        .lte('tanggal', dateTo);
+      if (error) throw error;
+      allOrders = allOrders.concat(data || []);
+    }
 
-    if (infoEl) infoEl.textContent = `${bmAllData.length} resi bermasalah dari ${rows.length} total order`;
+    // 3. Merge tracking ke order detail
+    bmAllData = allOrders.map(r => {
+      const resi = (r.resi || '').trim();
+      const t = trkByResi[resi];
+      return {
+        ...r, resi,
+        status_resi:            t?.status_resi            || null,
+        status_resi_step:       t?.status_resi_step       || null,
+        status_resi_updated_at: t?.status_resi_updated_at || null,
+        status_resi_detail:     t?.status_resi_detail     || null,
+        _rw:                    t?._rw                    || null,
+      };
+    });
+
+    if (infoEl) infoEl.textContent = `${bmAllData.length} resi bermasalah`;
     renderBmFollowupStats(bmAllData);
     applyBmFilter();
   } catch(e) {
