@@ -3274,10 +3274,11 @@ function renderBmCards(list) {
 
 // ── BM LOG: Respon Customer (Tidak Balas / Sudah Balas + Screenshot) ──────────
 
-let bmLogMap       = {};  // { resi: log_row }
-let bmLogResi      = null;
-let bmLogTypeVal   = null;
-let bmLogSsBlob    = null;
+let bmLogMap         = {};  // { resi: log_row }
+let bmLogResi        = null;
+let bmLogTypeVal     = null;
+let bmLogSsBlob      = null;
+let bmLogExistingUrl = null; // URL foto lama saat edit
 
 async function loadBmLogs(resiList) {
   bmLogMap = {};
@@ -3320,9 +3321,11 @@ function bmOpenLogModal(resi, type) {
   document.getElementById('bm-log-catatan').value = '';
   bmLogSsClear();
 
-  // Kalau ada log sebelumnya, pre-fill type
+  // Kalau ada log sebelumnya, pre-fill type + tampilkan foto lama
   const existing = bmLogMap[resi];
   const initType = type || (existing?.type) || null;
+  bmLogExistingUrl = null;
+
   if (initType) {
     const radio = document.querySelector(`input[name="bm-log-type"][value="${initType}"]`);
     if (radio) { radio.checked = true; bmLogTypeVal = initType; bmLogApplyTypeStyle(initType); }
@@ -3331,13 +3334,30 @@ function bmOpenLogModal(resi, type) {
     bmLogTypeVal = null;
   }
 
+  // Tampilkan foto lama kalau ada (mode edit)
+  if (existing?.screenshot_url) {
+    bmLogExistingUrl = existing.screenshot_url;
+    const img = document.getElementById('bm-log-ss-img');
+    img.src = existing.screenshot_url;
+    document.getElementById('bm-log-ss-preview').style.display = 'block';
+    document.getElementById('bm-log-ss-label').style.display   = 'none';
+    document.getElementById('bm-log-ss-change-btn').style.display = 'block';
+    // Screenshot tidak wajib saat edit (sudah ada foto lama)
+    const req = document.getElementById('bm-log-ss-required');
+    if (req) req.style.display = 'none';
+  } else {
+    const req = document.getElementById('bm-log-ss-required');
+    if (req) req.style.display = '';
+  }
+
   modal.style.display = 'flex';
 }
 
 function bmCloseLogModal() {
   document.getElementById('bm-log-modal').style.display = 'none';
-  bmLogResi   = null;
-  bmLogSsBlob = null;
+  bmLogResi        = null;
+  bmLogSsBlob      = null;
+  bmLogExistingUrl = null;
 }
 
 function bmLogTypeChange(radio) {
@@ -3357,21 +3377,28 @@ function bmLogApplyTypeStyle(type) {
 function bmLogSsPreview(input) {
   const file = input.files?.[0];
   if (!file) return;
-  bmLogSsBlob = file;
+  bmLogSsBlob      = file;
+  bmLogExistingUrl = null; // ganti dengan foto baru
   const url = URL.createObjectURL(file);
   const img  = document.getElementById('bm-log-ss-img');
   img.src    = url;
   document.getElementById('bm-log-ss-preview').style.display = 'block';
-  document.getElementById('bm-log-ss-label').style.display  = 'none';
+  document.getElementById('bm-log-ss-label').style.display   = 'none';
+  document.getElementById('bm-log-ss-change-btn').style.display = 'none'; // sudah ganti, hide tombol
 }
 
 function bmLogSsClear() {
-  bmLogSsBlob = null;
+  bmLogSsBlob      = null;
+  bmLogExistingUrl = null;
   document.getElementById('bm-log-ss-input').value = '';
   document.getElementById('bm-log-ss-preview').style.display = 'none';
   document.getElementById('bm-log-ss-label').style.display   = 'flex';
+  document.getElementById('bm-log-ss-change-btn').style.display = 'none';
   const img = document.getElementById('bm-log-ss-img');
   if (img) { img.src = ''; URL.revokeObjectURL?.(img.src); }
+  // Screenshot kembali wajib
+  const req = document.getElementById('bm-log-ss-required');
+  if (req) req.style.display = '';
 }
 
 function bmLogSsFullView() {
@@ -3382,18 +3409,21 @@ function bmLogSsFullView() {
 async function bmSaveLog() {
   if (!bmLogResi)    { showToast('Resi tidak diketahui.', 'error'); return; }
   if (!bmLogTypeVal) { showToast('Pilih status customer dulu.', 'error'); return; }
-  if (!bmLogSsBlob)  { showToast('Upload screenshot bukti dulu.', 'error'); return; }
+  if (!bmLogSsBlob && !bmLogExistingUrl) { showToast('Upload screenshot bukti dulu.', 'error'); return; }
 
   const btn = document.getElementById('bm-log-save-btn');
   btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
 
   try {
-    // 1. Upload screenshot ke storage
-    const ext  = bmLogSsBlob.type.includes('png') ? 'png' : 'jpg';
-    const path = `bermasalah/${bmLogResi}/${bmLogTypeVal}_${Date.now()}.${ext}`;
-    const { error: upErr } = await sbSS.storage.from(SS_BUCKET).upload(path, bmLogSsBlob, { upsert: true, contentType: bmLogSsBlob.type });
-    if (upErr) throw upErr;
-    const { data: { publicUrl } } = sbSS.storage.from(SS_BUCKET).getPublicUrl(path);
+    // 1. Upload screenshot (skip kalau pakai foto lama)
+    let publicUrl = bmLogExistingUrl;
+    if (bmLogSsBlob) {
+      const ext  = bmLogSsBlob.type.includes('png') ? 'png' : 'jpg';
+      const path = `bermasalah/${bmLogResi}/${bmLogTypeVal}_${Date.now()}.${ext}`;
+      const { error: upErr } = await sbSS.storage.from(SS_BUCKET).upload(path, bmLogSsBlob, { upsert: true, contentType: bmLogSsBlob.type });
+      if (upErr) throw upErr;
+      publicUrl = sbSS.storage.from(SS_BUCKET).getPublicUrl(path).data.publicUrl;
+    }
 
     // 2. Simpan log ke bermasalah_cs_log
     const catatan = document.getElementById('bm-log-catatan').value.trim();
