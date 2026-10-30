@@ -818,14 +818,15 @@ Keterangan: Bonus masker"></textarea>
       </div>
       <!-- Upload screenshot -->
       <div>
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Screenshot Bukti <span style="color:var(--danger)">*</span></div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Screenshot Bukti <span id="bm-log-ss-required" style="color:var(--danger)">*</span></div>
         <label id="bm-log-ss-label" style="display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--border);border-radius:var(--radius-lg);padding:20px;cursor:pointer;font-size:13px;color:var(--muted);transition:border-color .15s;min-height:80px" onclick="document.getElementById('bm-log-ss-input').click()">
           📎 Klik untuk upload screenshot
         </label>
         <input type="file" id="bm-log-ss-input" accept="image/*" style="display:none" onchange="bmLogSsPreview(this)">
         <div id="bm-log-ss-preview" style="display:none;margin-top:8px;position:relative">
           <img id="bm-log-ss-img" style="width:100%;border-radius:8px;max-height:180px;object-fit:cover;cursor:pointer" onclick="bmLogSsFullView()" />
-          <button onclick="bmLogSsClear()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+          <button onclick="bmLogSsClear()" title="Hapus foto" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+          <button id="bm-log-ss-change-btn" onclick="document.getElementById('bm-log-ss-input').click()" title="Ganti foto" style="display:none;position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:12px;padding:3px 10px;cursor:pointer;font-size:12px">🔄 Ganti Foto</button>
         </div>
       </div>
       <!-- Catatan opsional -->
