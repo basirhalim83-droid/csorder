@@ -2835,11 +2835,16 @@ function updateTrkCards(list) {
   const undell    = list.filter(r => trCardState(trEffectiveStage(r)) === 'undell').length;
   const delivered = list.filter(r => trCardState(trEffectiveStage(r)) === 'delivered').length;
   const retur     = list.filter(r => trCardState(trEffectiveStage(r)) === 'retur').length;
-  document.getElementById('trk-total').textContent     = total     || '—';
-  document.getElementById('trk-proses').textContent    = proses    || '—';
-  document.getElementById('trk-undell').textContent    = undell    || '—';
-  document.getElementById('trk-delivered').textContent = delivered || '—';
-  document.getElementById('trk-retur').textContent     = retur     || '—';
+  const pct = (n) => total > 0 ? (n / total * 100).toFixed(1) + '%' : '';
+  document.getElementById('trk-total').textContent         = total     || '—';
+  document.getElementById('trk-proses').textContent        = proses    || '—';
+  document.getElementById('trk-undell').textContent        = undell    || '—';
+  document.getElementById('trk-delivered').textContent     = delivered || '—';
+  document.getElementById('trk-retur').textContent         = retur     || '—';
+  document.getElementById('trk-proses-pct').textContent    = pct(proses);
+  document.getElementById('trk-undell-pct').textContent    = pct(undell);
+  document.getElementById('trk-delivered-pct').textContent = pct(delivered);
+  document.getElementById('trk-retur-pct').textContent     = pct(retur);
 }
 
 function showTrkAlerts(list) {
