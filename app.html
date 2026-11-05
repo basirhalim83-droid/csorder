@@ -815,6 +815,20 @@ Keterangan: Bonus masker"></textarea>
             <span>💬 Sudah Balas</span>
           </label>
         </div>
+        <!-- Sub-pilihan Sudah Balas -->
+        <div id="bm-log-sub-pilihan" style="display:none;margin-top:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Customer minta:</div>
+          <div style="display:flex;gap:8px">
+            <label class="bm-log-type-btn" id="bm-log-sub-antar">
+              <input type="radio" name="bm-log-sub" value="antar_ulang" onchange="bmLogSubChange(this)">
+              <span>🔄 Antar Ulang</span>
+            </label>
+            <label class="bm-log-type-btn" id="bm-log-sub-cancel">
+              <input type="radio" name="bm-log-sub" value="cancel" onchange="bmLogSubChange(this)">
+              <span>❌ Cancel</span>
+            </label>
+          </div>
+        </div>
       </div>
       <!-- Upload screenshot -->
       <div>
