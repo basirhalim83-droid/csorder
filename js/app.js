@@ -3238,7 +3238,10 @@ function renderBmCards(list) {
       const isTidak = log.type === 'tidak_balas';
       const cls     = isTidak ? 'bm-log-badge-tidak' : 'bm-log-badge-sudah';
       const icon    = isTidak ? '📵' : '💬';
-      const label   = isTidak ? 'Tidak Balas' : 'Sudah Balas';
+      let label = 'Sudah Balas';
+      if (isTidak) label = 'Tidak Balas';
+      else if (log.type === 'sudah_balas_antar_ulang') label = 'Balas · Antar Ulang';
+      else if (log.type === 'sudah_balas_cancel')      label = 'Balas · Cancel';
       const thumb   = log.screenshot_url ? `<img src="${log.screenshot_url}" onclick="event.stopPropagation();window.open('${log.screenshot_url}','_blank')" />` : '';
       const ts      = log.created_at ? new Date(log.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
       logHtml = `<div class="bm-log-badge ${cls}" onclick="event.stopPropagation();bmOpenLogModal('${resiSafe}')">${thumb}<span>${icon} ${label}${ts ? ' · '+ts : ''}</span></div>`;
@@ -3320,6 +3323,7 @@ function bmOpenLogModal(resi, type) {
   document.getElementById('bm-log-type-sudah').classList.remove('selected-tidak','selected-sudah');
   document.getElementById('bm-log-catatan').value = '';
   bmLogSsClear();
+  bmLogResetSub();
 
   // Kalau ada log sebelumnya, pre-fill type + tampilkan foto lama
   const existing = bmLogMap[resi];
@@ -3327,8 +3331,24 @@ function bmOpenLogModal(resi, type) {
   bmLogExistingUrl = null;
 
   if (initType) {
-    const radio = document.querySelector(`input[name="bm-log-type"][value="${initType}"]`);
-    if (radio) { radio.checked = true; bmLogTypeVal = initType; bmLogApplyTypeStyle(initType); }
+    const isSudahVariant = initType === 'sudah_balas' || initType === 'sudah_balas_antar_ulang' || initType === 'sudah_balas_cancel';
+    if (isSudahVariant) {
+      const radio = document.querySelector('input[name="bm-log-type"][value="sudah_balas"]');
+      if (radio) { radio.checked = true; bmLogApplyTypeStyle('sudah_balas'); }
+      document.getElementById('bm-log-sub-pilihan').style.display = 'block';
+      if (initType === 'sudah_balas_antar_ulang') {
+        const sub = document.querySelector('input[name="bm-log-sub"][value="antar_ulang"]');
+        if (sub) { sub.checked = true; bmLogSubChange(sub); }
+      } else if (initType === 'sudah_balas_cancel') {
+        const sub = document.querySelector('input[name="bm-log-sub"][value="cancel"]');
+        if (sub) { sub.checked = true; bmLogSubChange(sub); }
+      } else {
+        bmLogTypeVal = null; // sudah_balas lama, wajib pilih sub
+      }
+    } else {
+      const radio = document.querySelector(`input[name="bm-log-type"][value="${initType}"]`);
+      if (radio) { radio.checked = true; bmLogTypeVal = initType; bmLogApplyTypeStyle(initType); }
+    }
     if (existing?.catatan) document.getElementById('bm-log-catatan').value = existing.catatan;
   } else {
     bmLogTypeVal = null;
@@ -3358,11 +3378,34 @@ function bmCloseLogModal() {
   bmLogResi        = null;
   bmLogSsBlob      = null;
   bmLogExistingUrl = null;
+  bmLogResetSub();
+}
+
+function bmLogResetSub() {
+  document.querySelectorAll('input[name="bm-log-sub"]').forEach(el => el.checked = false);
+  document.getElementById('bm-log-sub-pilihan').style.display = 'none';
+  document.getElementById('bm-log-sub-antar')?.classList.remove('selected-sudah');
+  document.getElementById('bm-log-sub-cancel')?.classList.remove('selected-cancel');
 }
 
 function bmLogTypeChange(radio) {
-  bmLogTypeVal = radio.value;
+  if (radio.value === 'sudah_balas') {
+    bmLogTypeVal = null; // wajib pilih sub dulu
+    bmLogResetSub();
+    document.getElementById('bm-log-sub-pilihan').style.display = 'block';
+  } else {
+    bmLogTypeVal = radio.value;
+    bmLogResetSub();
+  }
   bmLogApplyTypeStyle(radio.value);
+}
+
+function bmLogSubChange(radio) {
+  bmLogTypeVal = 'sudah_balas_' + radio.value;
+  document.getElementById('bm-log-sub-antar').classList.remove('selected-sudah');
+  document.getElementById('bm-log-sub-cancel').classList.remove('selected-cancel');
+  if (radio.value === 'antar_ulang') document.getElementById('bm-log-sub-antar').classList.add('selected-sudah');
+  if (radio.value === 'cancel')      document.getElementById('bm-log-sub-cancel').classList.add('selected-cancel');
 }
 
 function bmLogApplyTypeStyle(type) {
@@ -3371,7 +3414,7 @@ function bmLogApplyTypeStyle(type) {
   elTidak.classList.remove('selected-tidak','selected-sudah');
   elSudah.classList.remove('selected-tidak','selected-sudah');
   if (type === 'tidak_balas') elTidak.classList.add('selected-tidak');
-  if (type === 'sudah_balas') elSudah.classList.add('selected-sudah');
+  if (type === 'sudah_balas' || type?.startsWith('sudah_balas')) elSudah.classList.add('selected-sudah');
 }
 
 function bmLogSsPreview(input) {
@@ -3408,7 +3451,7 @@ function bmLogSsFullView() {
 
 async function bmSaveLog() {
   if (!bmLogResi)    { showToast('Resi tidak diketahui.', 'error'); return; }
-  if (!bmLogTypeVal) { showToast('Pilih status customer dulu.', 'error'); return; }
+  if (!bmLogTypeVal) { showToast('Pilih status customer dulu' + (document.getElementById('bm-log-sub-pilihan')?.style.display !== 'none' ? ' (Antar Ulang / Cancel)' : '') + '.', 'error'); return; }
   if (!bmLogSsBlob && !bmLogExistingUrl) { showToast('Upload screenshot bukti dulu.', 'error'); return; }
 
   const btn = document.getElementById('bm-log-save-btn');
