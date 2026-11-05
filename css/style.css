@@ -130,6 +130,7 @@ body.app-body{display:flex;overflow-x:hidden}
 .sum-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:0.85rem;box-shadow:var(--shadow)}
 .sum-card .s-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;font-family:var(--mono);margin-bottom:4px}
 .sum-card .s-value{font-size:24px;font-weight:700;line-height:1}
+.sum-card .s-pct{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500}
 .s-total{color:var(--accent)}
 .s-tunggu{color:var(--muted)}
 .s-kirim{color:var(--success)}
