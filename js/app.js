@@ -3567,6 +3567,11 @@ function lhMoney(n) {
   return 'Rp' + Number(n || 0).toLocaleString('id-ID');
 }
 
+// Auto-select number input on focus so user doesn't have to delete 0 manually
+document.addEventListener('focus', e => {
+  if (e.target.type === 'number' && e.target.closest('#page-laporanharian, .lh-modal')) e.target.select();
+}, true);
+
 function lhTodayWIB() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 }
