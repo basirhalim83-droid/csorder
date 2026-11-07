@@ -680,9 +680,9 @@ Keterangan: Bonus masker"></textarea>
       <div class="lh-filters">
         <div class="lh-filter-left">
           <label class="lh-filter">
-            📅 <input type="date" id="lh-filter-start" class="lh-filter-input">
+            📅 <input type="date" id="lh-filter-start" class="lh-filter-input" onchange="loadLaporanHarian()">
             <span style="color:#587488;margin:0 4px">—</span>
-            <input type="date" id="lh-filter-end" class="lh-filter-input">
+            <input type="date" id="lh-filter-end" class="lh-filter-input" onchange="loadLaporanHarian()">
           </label>
           <label class="lh-filter">
             🔗 <select id="lh-filter-channel" class="lh-filter-input" onchange="loadLaporanHarian()">
@@ -690,7 +690,6 @@ Keterangan: Bonus masker"></textarea>
             </select>
           </label>
         </div>
-        <button class="lh-btn-ghost" onclick="loadLaporanHarian()">⬇ Terapkan</button>
       </div>
 
       <!-- Stats row -->
