@@ -3523,7 +3523,7 @@ async function bmSaveLog() {
 // Integrates with Laporan Akuisisi via API bridge.
 // CS inputs daily reports (leads, packages, BEF) from here; data goes to Laporan Akuisisi Supabase.
 
-const LH_API_BASE = ''; // Set to Laporan Akuisisi Vercel URL, e.g. 'https://laporan-akuisisi.vercel.app'
+const LH_API_BASE = 'https://akuisisiadsy.vercel.app';
 const LH_LEAD_KEYS = ['passive','consultation','priceShipping','ooc','casual','boughtElsewhere','other'];
 
 let lhState = {
