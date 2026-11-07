@@ -3613,33 +3613,33 @@ async function loadLaporanHarian() {
   lhShowError('');
 
   try {
-    // Step 1: Verify CS and get assignments
+    const start = document.getElementById('lh-filter-start').value;
+    const end = document.getElementById('lh-filter-end').value;
+
     if (!lhState.verified) {
+      // Single request: verify + catalog + reports all at once
       lhShowStatus('Menghubungkan ke Laporan Akuisisi...');
-      const verifyData = await lhFetch('verify');
+      const data = await lhFetch('init', { start, end });
       lhState.verified = true;
-      lhState.csName = verifyData.cs;
-      lhState.assignments = verifyData.assignments || [];
+      lhState.csName = data.cs;
+      lhState.assignments = data.assignments || [];
+      lhState.catalog = data.catalog || [];
+      lhState.reports = data.reports || [];
+      lhState.leadReports = data.leadReports || [];
 
       if (!lhState.assignments.length) {
         lhShowStatus('Belum ada penugasan untuk ' + lhState.csName + '. Hubungi admin Laporan Akuisisi.', 'error');
         return;
       }
-
-      // Load catalog
-      const catData = await lhFetch('catalog');
-      lhState.catalog = catData.catalog || [];
+    } else {
+      // Already verified, only refresh reports
+      const repData = await lhFetch('reports', { start, end });
+      lhState.reports = repData.reports || [];
+      lhState.leadReports = repData.leadReports || [];
     }
 
-    // Step 2: Render assignment dropdown
+    // Render
     renderLHAssignments();
-
-    // Step 3: Load reports for date range
-    const start = document.getElementById('lh-filter-start').value;
-    const end = document.getElementById('lh-filter-end').value;
-    const repData = await lhFetch('reports', { start, end });
-    lhState.reports = repData.reports || [];
-    lhState.leadReports = repData.leadReports || [];
 
     // Step 4: Render everything
     renderLHSummary();
