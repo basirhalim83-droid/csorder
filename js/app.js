@@ -3575,8 +3575,20 @@ function lhShowStatus(msg, type = 'info') {
   const el = document.getElementById('lh-status');
   el.style.display = 'block';
   el.textContent = msg;
-  el.style.background = type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#eff6ff';
-  el.style.color = type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#2563eb';
+  el.style.background = type === 'error' ? '#fbefeb' : type === 'success' ? '#eaf8ef' : '#edf8fd';
+  el.style.color = type === 'error' ? '#a35343' : type === 'success' ? '#227148' : '#336980';
+}
+
+function openLHModal(editMode) {
+  if (!editMode) lhResetForm();
+  document.getElementById('lh-modal').style.display = '';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLHModal() {
+  document.getElementById('lh-modal').style.display = 'none';
+  document.body.style.overflow = '';
+  lhState.editingId = null;
 }
 
 function lhHideStatus() {
@@ -3654,7 +3666,7 @@ function renderLHAssignments() {
 function onLHAssignmentChange() {
   const idx = document.getElementById('lh-assignment').value;
   if (idx === '') {
-    document.getElementById('lh-packages').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pilih penugasan terlebih dahulu.</div>';
+    document.getElementById('lh-packages').innerHTML = '<div class="lh-empty-pkg">Pilih penugasan terlebih dahulu.</div>';
     document.getElementById('lh-info-box').style.display = 'none';
     document.getElementById('lh-totals').style.display = 'none';
     document.getElementById('lh-revenue-box').style.display = 'none';
@@ -3695,7 +3707,7 @@ function onLHAssignmentChange() {
 function renderLHPackages(unitLabel) {
   const container = document.getElementById('lh-packages');
   if (!lhState.currentLines.length) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Admin belum mengatur paket aktif untuk produk ini.</div>';
+    container.innerHTML = '<div class="lh-empty-pkg">Admin belum mengatur paket aktif untuk produk ini.</div>';
     document.getElementById('lh-totals').style.display = 'none';
     document.getElementById('lh-revenue-box').style.display = 'none';
     return;
@@ -3706,11 +3718,11 @@ function renderLHPackages(unitLabel) {
       <div class="lh-pkg-info">
         <strong>${l.name}</strong>
         <small>${l.units} ${unitLabel} · ${lhMoney(l.price)} / paket${l.kind === 'reseller' ? ' · Reseller' : ''}</small>
-        ${l.canceled > 0 ? '<small style="color:#dc2626">Dibatalkan admin: ' + l.canceled + ' order</small>' : ''}
+        ${l.canceled > 0 ? '<small style="color:#a35343">Dibatalkan admin: ' + l.canceled + ' order</small>' : ''}
       </div>
       <div class="lh-pkg-input">
-        <label style="font-size:11px;color:var(--muted)">Jumlah order</label>
-        <input type="number" class="f-input lh-pkg-order" data-idx="${i}" min="${l.canceled || 0}" step="1" value="${l.orders}" oninput="onLHOrderChange()">
+        <label>Jumlah order</label>
+        <input type="number" class="lh-pkg-order" data-idx="${i}" min="${l.canceled || 0}" step="1" value="${l.orders}" oninput="onLHOrderChange()">
       </div>
     </div>
   `).join('');
@@ -3840,6 +3852,7 @@ async function submitLaporan() {
 
     showToast('✅ Laporan harian berhasil disimpan!', 'success');
     lhState.editingId = null;
+    closeLHModal();
     lhResetForm();
     await loadLaporanHarian();
 
@@ -3847,7 +3860,7 @@ async function submitLaporan() {
     lhShowError(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '💾 Simpan Laporan Harian';
+    btn.textContent = '✓ Simpan laporan CS';
   }
 }
 
@@ -3860,7 +3873,7 @@ function lhResetForm() {
   document.querySelectorAll('.lh-bef').forEach(i => i.value = 0);
   lhState.currentLines = [];
   lhState.editingId = null;
-  document.getElementById('lh-packages').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pilih penugasan terlebih dahulu.</div>';
+  document.getElementById('lh-packages').innerHTML = '<div class="lh-empty-pkg">Pilih penugasan terlebih dahulu.</div>';
   document.getElementById('lh-info-box').style.display = 'none';
   document.getElementById('lh-totals').style.display = 'none';
   document.getElementById('lh-revenue-box').style.display = 'none';
@@ -3876,11 +3889,30 @@ function renderLHSummary() {
     units += Number(r.units || 0) - Number(r.invalidUnits || 0);
     revenue += Number(r.revenue || 0);
   }
-  document.getElementById('lh-leads').textContent = leads;
-  document.getElementById('lh-closing').textContent = closing;
-  document.getElementById('lh-units').textContent = units;
-  document.getElementById('lh-revenue').textContent = lhMoney(revenue);
-  document.getElementById('lh-cr').textContent = leads ? (closing / leads * 100).toFixed(1) + '%' : '0%';
+  const cr = leads ? (closing / leads * 100).toFixed(1) : '0.0';
+  const upsell = closing > 0 ? (units / closing).toFixed(2) : '—';
+
+  document.getElementById('lh-s-revenue').textContent = lhMoney(revenue);
+  document.getElementById('lh-s-leads').textContent = leads;
+  document.getElementById('lh-s-closing').textContent = closing;
+  document.getElementById('lh-s-cr').textContent = cr + '%';
+  document.getElementById('lh-s-upsell').textContent = upsell;
+  document.getElementById('lh-s-units-note').textContent = units + ' unit terjual';
+  document.getElementById('lh-s-leads-note').textContent = leads + ' leads ditangani';
+
+  // Lead summary grid
+  const befTotals = {};
+  LH_LEAD_KEYS.forEach(k => befTotals[k] = 0);
+  for (const lr of lhState.leadReports) {
+    if (lr.counts) {
+      LH_LEAD_KEYS.forEach(k => befTotals[k] += Number(lr.counts[k] || 0));
+    }
+  }
+  const befMap = { passive: 'lh-ls-passive', consultation: 'lh-ls-consultation', priceShipping: 'lh-ls-priceShipping', ooc: 'lh-ls-ooc', casual: 'lh-ls-casual', boughtElsewhere: 'lh-ls-boughtElsewhere', other: 'lh-ls-other' };
+  for (const [key, elId] of Object.entries(befMap)) {
+    const el = document.getElementById(elId);
+    if (el) el.textContent = befTotals[key] || 0;
+  }
 }
 
 function renderLHChart() {
@@ -3904,8 +3936,8 @@ function renderLHChart() {
   }
   const dates = Object.keys(byDate).sort();
   if (!dates.length) {
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
-    ctx.font = '12px Plus Jakarta Sans, sans-serif';
+    ctx.fillStyle = '#587488';
+    ctx.font = '12px DM Sans, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Belum ada data untuk ditampilkan', W / 2, H / 2);
     return;
@@ -3916,14 +3948,14 @@ function renderLHChart() {
   const padL = 40, padB = 30, chartH = H - padB - 10;
 
   // Y axis
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
-  ctx.font = '10px Plus Jakarta Sans, sans-serif';
+  ctx.fillStyle = '#587488';
+  ctx.font = '10px DM Sans, sans-serif';
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const y = 10 + chartH - (chartH / 4) * i;
     ctx.fillText(Math.round(maxClosing / 4 * i), padL - 6, y + 3);
     ctx.beginPath();
-    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim() || '#e5e7eb';
+    ctx.strokeStyle = '#eaf4fa';
     ctx.lineWidth = 0.5;
     ctx.moveTo(padL, y);
     ctx.lineTo(W, y);
@@ -3931,13 +3963,12 @@ function renderLHChart() {
   }
 
   // Bars
-  const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
   ctx.textAlign = 'center';
   dates.forEach((d, i) => {
     const x = padL + 10 + i * ((W - padL - 10) / dates.length) + ((W - padL - 10) / dates.length - barW) / 2;
     const val = byDate[d].closing;
     const h = (val / maxClosing) * chartH;
-    ctx.fillStyle = accent;
+    ctx.fillStyle = '#00a8df';
     ctx.beginPath();
     const r = Math.min(4, barW / 2);
     ctx.moveTo(x, 10 + chartH);
@@ -3949,13 +3980,13 @@ function renderLHChart() {
     ctx.fill();
 
     // Value on top
-    ctx.fillStyle = accent;
-    ctx.font = 'bold 10px Plus Jakarta Sans, sans-serif';
+    ctx.fillStyle = '#073b56';
+    ctx.font = 'bold 10px Manrope, DM Sans, sans-serif';
     ctx.fillText(val, x + barW / 2, 10 + chartH - h - 4);
 
     // Date label
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
-    ctx.font = '9px Plus Jakarta Sans, sans-serif';
+    ctx.fillStyle = '#587488';
+    ctx.font = '9px DM Sans, sans-serif';
     const label = d.split('-').slice(1).reverse().join('/');
     ctx.fillText(label, x + barW / 2, H - 8);
   });
@@ -3963,30 +3994,42 @@ function renderLHChart() {
 
 function renderLHHistory() {
   const tbody = document.getElementById('lh-history-body');
-  if (!lhState.reports.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;font-size:13px">Belum ada laporan di rentang ini.</td></tr>';
+  const countEl = document.getElementById('lh-report-count');
+  const searchVal = (document.getElementById('lh-search')?.value || '').toLowerCase();
+
+  let filtered = lhState.reports;
+  if (searchVal) {
+    filtered = filtered.filter(r =>
+      (r.product || '').toLowerCase().includes(searchVal) ||
+      (r.advertiser || '').toLowerCase().includes(searchVal)
+    );
+  }
+
+  if (countEl) countEl.textContent = filtered.length;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="lh-empty-cell">Belum ada laporan di rentang ini.</td></tr>';
     return;
   }
 
   const lrMap = new Map(lhState.leadReports.map(l => [l.reportId, l]));
 
-  tbody.innerHTML = lhState.reports.map(r => {
+  tbody.innerHTML = filtered.map(r => {
     const net = Number(r.closing || 0) - Number(r.invalid || 0);
     const netUnits = Number(r.units || 0) - Number(r.invalidUnits || 0);
-    const lr = lrMap.get(r.id);
-    const befStatus = lr ? '✅ Terisi' : '⬜ Belum';
     const dateLabel = r.date.split('-').reverse().join('/');
+    const chBadge = r.channel === 'CTWA'
+      ? '<span class="lh-badge lh-badge-ctwa">CTWA</span>'
+      : '<span class="lh-badge lh-badge-web">Web</span>';
     return '<tr>' +
       '<td><strong>' + dateLabel + '</strong></td>' +
-      '<td>' + r.product + '</td>' +
-      '<td>' + r.advertiser + '</td>' +
-      '<td>' + r.channel + '</td>' +
+      '<td><strong>' + r.product + '</strong><span class="lh-cell-sub">' + r.advertiser + '</span></td>' +
+      '<td>' + chBadge + '</td>' +
       '<td>' + r.leads + '</td>' +
       '<td>' + net + '</td>' +
       '<td>' + netUnits + '</td>' +
-      '<td style="font-family:var(--mono)">' + lhMoney(r.revenue) + '</td>' +
-      '<td>' + befStatus + '</td>' +
-      '<td><button class="btn-text" onclick="editLHReport(\'' + r.id + '\')">Edit</button></td>' +
+      '<td class="lh-money">' + lhMoney(r.revenue) + '</td>' +
+      '<td><button class="lh-text-btn" onclick="editLHReport(\'' + r.id + '\')">✏️ Edit</button></td>' +
     '</tr>';
   }).join('');
 }
@@ -4021,7 +4064,7 @@ function editLHReport(id) {
   }
   lhUpdateBEFTotals();
 
-  // Scroll to form
-  document.getElementById('lh-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Open modal in edit mode
+  openLHModal(true);
   showToast('📝 Mode edit: ' + report.date + ' ' + report.product, 'info');
 }
