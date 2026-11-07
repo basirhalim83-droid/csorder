@@ -4028,6 +4028,7 @@ function renderLHHistory() {
       ? '<span class="lh-badge lh-badge-ctwa">CTWA</span>'
       : '<span class="lh-badge lh-badge-web">Web</span>';
     return '<tr>' +
+      '<td><button class="lh-text-btn" onclick="editLHReport(\'' + r.id + '\')">✏️ Edit</button></td>' +
       '<td><strong>' + dateLabel + '</strong></td>' +
       '<td><strong>' + r.product + '</strong><span class="lh-cell-sub">' + r.advertiser + '</span></td>' +
       '<td>' + chBadge + '</td>' +
@@ -4035,7 +4036,6 @@ function renderLHHistory() {
       '<td>' + net + '</td>' +
       '<td>' + netUnits + '</td>' +
       '<td class="lh-money">' + lhMoney(r.revenue) + '</td>' +
-      '<td><button class="lh-text-btn" onclick="editLHReport(\'' + r.id + '\')">✏️ Edit</button></td>' +
     '</tr>';
   }).join('');
 }
