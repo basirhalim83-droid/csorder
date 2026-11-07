@@ -3605,7 +3605,8 @@ async function loadLaporanHarian() {
   if (!currentUser || !currentProfile) return;
 
   const today = lhTodayWIB();
-  if (!document.getElementById('lh-filter-start').value) document.getElementById('lh-filter-start').value = today;
+  const monthStart = today.slice(0, 8) + '01';
+  if (!document.getElementById('lh-filter-start').value) document.getElementById('lh-filter-start').value = monthStart;
   if (!document.getElementById('lh-filter-end').value) document.getElementById('lh-filter-end').value = today;
   if (!document.getElementById('lh-date').value) document.getElementById('lh-date').value = today;
 
