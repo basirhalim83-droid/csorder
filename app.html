@@ -45,6 +45,9 @@
     <div class="nav-item" id="nav-ongkir" onclick="switchPage('ongkir')">
       <span class="nav-icon">🚚</span> Cek Ongkir
     </div>
+    <div class="nav-item" id="nav-laporanharian" onclick="switchPage('laporanharian')">
+      <span class="nav-icon">📋</span> Laporan Harian
+    </div>
     <div class="nav-section">Akun</div>
     <div class="nav-item" id="nav-setting" onclick="switchPage('setting')">
       <span class="nav-icon">⚙️</span> Setting
@@ -655,6 +658,155 @@ Keterangan: Bonus masker"></textarea>
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════
+       PAGE: LAPORAN HARIAN
+  ═══════════════════════════════════════ -->
+  <div class="page" id="page-laporanharian">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Laporan Harian</div>
+        <div class="page-sub" style="margin:0">Input ringkasan harian &amp; report lead BEF</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" class="f-input" id="lh-filter-start" style="width:140px;padding:8px 10px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">s.d.</span>
+        <input type="date" class="f-input" id="lh-filter-end" style="width:140px;padding:8px 10px;font-size:12px">
+        <button class="btn-secondary" onclick="loadLaporanHarian()" style="padding:8px 14px;font-size:12px">Terapkan</button>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="lh-status" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
+
+    <!-- Summary cards -->
+    <div class="sum-grid" id="lh-summary" style="margin-bottom:16px">
+      <div class="sum-card"><div class="sum-label">Total Leads</div><div class="sum-val" id="lh-leads">0</div></div>
+      <div class="sum-card"><div class="sum-label">Closing Bersih</div><div class="sum-val" id="lh-closing">0</div></div>
+      <div class="sum-card"><div class="sum-label">Unit Bersih</div><div class="sum-val" id="lh-units">0</div></div>
+      <div class="sum-card"><div class="sum-label">Omzet</div><div class="sum-val" id="lh-revenue">Rp0</div></div>
+      <div class="sum-card"><div class="sum-label">Closing Rate</div><div class="sum-val" id="lh-cr">0%</div></div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card" id="lh-chart-card" style="margin-bottom:16px">
+      <div class="card-title">Grafik Harian</div>
+      <canvas id="lh-chart" height="180" style="width:100%"></canvas>
+    </div>
+
+    <!-- Input form -->
+    <div class="card" id="lh-form-card">
+      <div class="card-title">Input Laporan</div>
+      <div class="card-desc">Pilih penugasan, isi leads dan order per paket, serta report lead BEF.</div>
+
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="f-group">
+          <label class="f-label">Tanggal Laporan</label>
+          <input type="date" class="f-input" id="lh-date">
+        </div>
+        <div class="f-group">
+          <label class="f-label">Penugasan</label>
+          <select class="f-input" id="lh-assignment" onchange="onLHAssignmentChange()">
+            <option value="">Memuat penugasan...</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="lh-info-box" class="lh-info-box" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--accent-light);border-radius:8px;font-size:12px;color:var(--accent)"></div>
+
+      <!-- Tabs: Total Order / Report Lead BEF -->
+      <div class="lh-tabs" style="margin-bottom:14px">
+        <button class="lh-tab active" id="lh-tab-orders" onclick="switchLHTab('orders')">Total Order</button>
+        <button class="lh-tab" id="lh-tab-bef" onclick="switchLHTab('bef')">Report Lead BEF</button>
+      </div>
+
+      <!-- Leads input (shared) -->
+      <div class="form-grid cols-1" style="margin-bottom:12px">
+        <div class="f-group">
+          <label class="f-label">Jumlah Leads</label>
+          <input type="number" class="f-input" id="lh-leads-input" min="0" step="1" value="0">
+        </div>
+      </div>
+
+      <!-- Panel: Orders -->
+      <div id="lh-panel-orders">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <strong style="font-size:13px">Order closing per paket</strong>
+          <small style="color:var(--muted);font-size:11px">1 order = 1 closing</small>
+        </div>
+        <div id="lh-packages">
+          <div style="color:var(--muted);font-size:12px;padding:12px 0">Pilih penugasan terlebih dahulu.</div>
+        </div>
+        <div class="lh-totals" id="lh-totals" style="display:none;margin-top:12px">
+          <div class="lh-total-row"><span>Closing bersih</span><strong id="lh-t-closing">0</strong></div>
+          <div class="lh-total-row"><span>Unit bersih</span><strong id="lh-t-units">0</strong></div>
+        </div>
+        <div class="lh-revenue-box" id="lh-revenue-box" style="display:none;margin-top:10px">
+          <span>Omzet otomatis</span>
+          <strong id="lh-t-revenue">Rp0</strong>
+          <small>Jumlah order bersih setiap paket × harga total paket.</small>
+        </div>
+        <div class="f-group" style="margin-top:12px">
+          <label class="f-label">Catatan order (opsional)</label>
+          <textarea class="f-input" id="lh-notes" rows="2" style="resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <!-- Panel: BEF -->
+      <div id="lh-panel-bef" style="display:none">
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Satu lead hanya masuk satu kategori.</p>
+        <div class="form-grid" id="lh-bef-fields">
+          <div class="f-group"><label class="f-label">Pasif</label><input type="number" class="f-input lh-bef" data-key="passive" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">Konsultasi</label><input type="number" class="f-input lh-bef" data-key="consultation" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">Harga/Ongkir</label><input type="number" class="f-input lh-bef" data-key="priceShipping" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">OOC</label><input type="number" class="f-input lh-bef" data-key="ooc" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">Lead iseng</label><input type="number" class="f-input lh-bef" data-key="casual" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">Beli Di Lain</label><input type="number" class="f-input lh-bef" data-key="boughtElsewhere" min="0" step="1" value="0"></div>
+          <div class="f-group"><label class="f-label">Lainnya</label><input type="number" class="f-input lh-bef" data-key="other" min="0" step="1" value="0"></div>
+        </div>
+        <div class="lh-totals" style="margin-top:12px">
+          <div class="lh-total-row"><span>Total kategori</span><strong id="lh-bef-total">0</strong></div>
+          <div class="lh-total-row"><span>Belum dikategorikan</span><strong id="lh-bef-remaining">0</strong></div>
+        </div>
+        <div class="f-group" style="margin-top:12px">
+          <label class="f-label">Catatan BEF (opsional)</label>
+          <textarea class="f-input" id="lh-bef-notes" rows="2" maxlength="2000" style="resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <!-- Error + submit -->
+      <div id="lh-error" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;color:#dc2626;border-radius:8px;font-size:12px"></div>
+      <button class="btn-primary" id="lh-submit" onclick="submitLaporan()" style="margin-top:16px;width:100%">
+        💾 Simpan Laporan Harian
+      </button>
+    </div>
+
+    <!-- History table -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Riwayat Laporan</div>
+      <div class="table-wrap">
+        <table class="data-table" id="lh-history-table">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Produk</th>
+              <th>Advertiser</th>
+              <th>Ch</th>
+              <th>Leads</th>
+              <th>Closing</th>
+              <th>Unit</th>
+              <th>Omzet</th>
+              <th>BEF</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="lh-history-body">
+            <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;font-size:13px">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- end main-area -->
 
 <!-- ── BOTTOM NAV (mobile) ── -->
@@ -715,6 +867,18 @@ Keterangan: Bonus masker"></textarea>
         </svg>
       </div>
       <span class="bnav-label">Ongkir</span>
+    </button>
+
+    <button class="bnav-item" id="bnav-laporanharian" onclick="switchPage('laporanharian')">
+      <div class="bnav-icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
+          <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
+          <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2"/>
+          <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </div>
+      <span class="bnav-label">Laporan</span>
     </button>
 
     <button class="bnav-item" id="bnav-setting" onclick="switchPage('setting')">

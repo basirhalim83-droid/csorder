@@ -524,4 +524,38 @@ tr.row-rts{background:var(--warn-light)!important}
 .ss-badge-new{font-size:12px;color:var(--accent);font-weight:500}
 .ss-pick-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--accent-light);color:var(--accent);border:1.5px dashed var(--accent);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;width:fit-content}
 .ss-pick-btn:hover{background:var(--accent);color:#fff}
+
+/* ── LAPORAN HARIAN ──────────────────────────────────────────────────────── */
+.lh-tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);padding-bottom:0}
+.lh-tab{padding:8px 16px;font-size:13px;font-weight:600;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.lh-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.lh-tab:hover{color:var(--text)}
+
+.lh-pkg-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
+.lh-pkg-info{flex:1;min-width:0}
+.lh-pkg-info strong{display:block;font-size:13px;margin-bottom:2px}
+.lh-pkg-info small{display:block;font-size:11px;color:var(--muted)}
+.lh-pkg-input{width:120px;flex-shrink:0}
+.lh-pkg-input input{width:100%;text-align:center}
+
+.lh-totals{display:flex;gap:16px;flex-wrap:wrap}
+.lh-total-row{display:flex;align-items:center;gap:6px;font-size:13px}
+.lh-total-row span{color:var(--muted)}
+
+.lh-revenue-box{padding:12px 16px;background:var(--accent-light);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lh-revenue-box span{font-size:13px;color:var(--accent)}
+.lh-revenue-box strong{font-size:16px;color:var(--accent)}
+.lh-revenue-box small{font-size:11px;color:var(--muted);width:100%}
+
+.lh-info-box{display:flex;align-items:center;gap:8px}
+
+.btn-text{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:4px 8px;border-radius:4px}
+.btn-text:hover{background:var(--accent-light)}
+
+@media(max-width:640px){
+  .lh-pkg-row{flex-direction:column;align-items:stretch}
+  .lh-pkg-input{width:100%}
+  .lh-totals{flex-direction:column;gap:6px}
+  .lh-revenue-box{flex-direction:column;align-items:flex-start}
+}
 .ss-locked-notice{padding:10px 14px;background:var(--danger-light);color:var(--danger);border-radius:8px;font-size:13px;font-weight:600}
