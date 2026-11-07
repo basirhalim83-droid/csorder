@@ -257,20 +257,21 @@ function drpNav(dir) {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function switchPage(name) {
-  ['dashboard','upload','tracking','bermasalah','setting','ongkir'].forEach(p => {
+  ['dashboard','upload','tracking','bermasalah','setting','ongkir','laporanharian'].forEach(p => {
     document.getElementById('page-'+p).classList.toggle('active', p===name);
     const navEl = document.getElementById('nav-'+p);
     if (navEl) navEl.classList.toggle('active', p===name);
     const bnavEl = document.getElementById('bnav-'+p);
     if (bnavEl) bnavEl.classList.toggle('active', p===name);
   });
-  const titles = { dashboard:'Dashboard', upload:'Upload Order', tracking:'Tracking Order', bermasalah:'Resi Bermasalah', setting:'Setting', ongkir:'Cek Ongkir' };
+  const titles = { dashboard:'Dashboard', upload:'Upload Order', tracking:'Tracking Order', bermasalah:'Resi Bermasalah', setting:'Setting', ongkir:'Cek Ongkir', laporanharian:'Laporan Harian' };
   document.getElementById('topbar-title').textContent = titles[name] || '';
   if (name === 'dashboard')  loadDashboard();
   if (name === 'upload')     { loadHistoryMini(); checkAndShowLockBanner(); }
   if (name === 'tracking')   loadTracking();
   if (name === 'bermasalah') loadBermasalah();
   if (name === 'setting')    loadSetting();
+  if (name === 'laporanharian') loadLaporanHarian();
 }
 
 // ── DARK MODE ────────────────────────────────────────────────────────────────
@@ -3516,4 +3517,511 @@ async function bmSaveLog() {
   } finally {
     btn.disabled = false; btn.textContent = '💾 Simpan';
   }
+}
+
+// ── LAPORAN HARIAN ────────────────────────────────────────────────────────────
+// Integrates with Laporan Akuisisi via API bridge.
+// CS inputs daily reports (leads, packages, BEF) from here; data goes to Laporan Akuisisi Supabase.
+
+const LH_API_BASE = ''; // Set to Laporan Akuisisi Vercel URL, e.g. 'https://laporan-akuisisi.vercel.app'
+const LH_LEAD_KEYS = ['passive','consultation','priceShipping','ooc','casual','boughtElsewhere','other'];
+
+let lhState = {
+  verified: false,
+  csName: '',
+  assignments: [],
+  catalog: [],
+  reports: [],
+  leadReports: [],
+  currentLines: [],
+  editingId: null
+};
+
+function lhApiUrl() {
+  const base = LH_API_BASE || window.LH_LAPORAN_API || '';
+  if (!base) return null;
+  return base.replace(/\/$/, '') + '/api/laporan-bridge';
+}
+
+async function lhFetch(action, params = {}, method = 'GET', body = null) {
+  const url = lhApiUrl();
+  if (!url) throw new Error('API Laporan belum dikonfigurasi. Set LH_API_BASE di js/app.js atau window.LH_LAPORAN_API.');
+  const session = await sb.auth.getSession();
+  const token = session?.data?.session?.access_token;
+  if (!token) throw new Error('Belum login.');
+
+  const qs = new URLSearchParams({ action, ...params });
+  const opts = {
+    method,
+    headers: { 'X-CS-Token': token, 'Content-Type': 'application/json' }
+  };
+  if (method === 'POST' && body) opts.body = JSON.stringify(body);
+
+  const res = await fetch(`${url}?${qs}`, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function lhMoney(n) {
+  return 'Rp' + Number(n || 0).toLocaleString('id-ID');
+}
+
+function lhTodayWIB() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+}
+
+function lhShowStatus(msg, type = 'info') {
+  const el = document.getElementById('lh-status');
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#eff6ff';
+  el.style.color = type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#2563eb';
+}
+
+function lhHideStatus() {
+  document.getElementById('lh-status').style.display = 'none';
+}
+
+function lhShowError(msg) {
+  const el = document.getElementById('lh-error');
+  if (msg) { el.style.display = 'block'; el.textContent = msg; }
+  else el.style.display = 'none';
+}
+
+async function loadLaporanHarian() {
+  if (!currentUser || !currentProfile) return;
+
+  const today = lhTodayWIB();
+  if (!document.getElementById('lh-filter-start').value) document.getElementById('lh-filter-start').value = today;
+  if (!document.getElementById('lh-filter-end').value) document.getElementById('lh-filter-end').value = today;
+  if (!document.getElementById('lh-date').value) document.getElementById('lh-date').value = today;
+
+  lhHideStatus();
+  lhShowError('');
+
+  try {
+    // Step 1: Verify CS and get assignments
+    if (!lhState.verified) {
+      lhShowStatus('Menghubungkan ke Laporan Akuisisi...');
+      const verifyData = await lhFetch('verify');
+      lhState.verified = true;
+      lhState.csName = verifyData.cs;
+      lhState.assignments = verifyData.assignments || [];
+
+      if (!lhState.assignments.length) {
+        lhShowStatus('Belum ada penugasan untuk ' + lhState.csName + '. Hubungi admin Laporan Akuisisi.', 'error');
+        return;
+      }
+
+      // Load catalog
+      const catData = await lhFetch('catalog');
+      lhState.catalog = catData.catalog || [];
+    }
+
+    // Step 2: Render assignment dropdown
+    renderLHAssignments();
+
+    // Step 3: Load reports for date range
+    const start = document.getElementById('lh-filter-start').value;
+    const end = document.getElementById('lh-filter-end').value;
+    const repData = await lhFetch('reports', { start, end });
+    lhState.reports = repData.reports || [];
+    lhState.leadReports = repData.leadReports || [];
+
+    // Step 4: Render everything
+    renderLHSummary();
+    renderLHChart();
+    renderLHHistory();
+    lhHideStatus();
+
+  } catch (err) {
+    lhShowStatus(err.message, 'error');
+  }
+}
+
+function renderLHAssignments() {
+  const sel = document.getElementById('lh-assignment');
+  sel.innerHTML = '<option value="">Pilih penugasan</option>';
+  lhState.assignments.forEach((a, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${a.product} · ${a.advertiser} · ${a.channel}`;
+    sel.appendChild(opt);
+  });
+}
+
+function onLHAssignmentChange() {
+  const idx = document.getElementById('lh-assignment').value;
+  if (idx === '') {
+    document.getElementById('lh-packages').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pilih penugasan terlebih dahulu.</div>';
+    document.getElementById('lh-info-box').style.display = 'none';
+    document.getElementById('lh-totals').style.display = 'none';
+    document.getElementById('lh-revenue-box').style.display = 'none';
+    return;
+  }
+  const a = lhState.assignments[idx];
+  const info = document.getElementById('lh-info-box');
+  info.style.display = 'block';
+  info.textContent = '🔗 Terhubung ke ' + a.advertiser + ' / ' + a.product + ' / ' + a.channel;
+
+  // Load packages for this product
+  const product = lhState.catalog.find(c => c.name === a.product);
+  const packages = (product?.packages || []).filter(p => p.active);
+
+  // If editing, merge with existing packageLines
+  const existingLines = lhState.editingId
+    ? (lhState.reports.find(r => r.id === lhState.editingId)?.packageLines || [])
+    : [];
+
+  lhState.currentLines = packages.map(p => {
+    const existing = existingLines.find(e => e.id === p.id);
+    return {
+      id: p.id, name: p.name, units: p.units, price: p.price,
+      kind: p.kind || 'regular', orders: existing ? existing.orders : 0,
+      canceled: existing ? (existing.canceled || 0) : 0
+    };
+  });
+  // Add old lines not in current packages (for existing reports)
+  for (const el of existingLines) {
+    if (!lhState.currentLines.some(l => l.id === el.id)) {
+      lhState.currentLines.push({ ...el });
+    }
+  }
+
+  renderLHPackages(product?.unit || 'unit');
+}
+
+function renderLHPackages(unitLabel) {
+  const container = document.getElementById('lh-packages');
+  if (!lhState.currentLines.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Admin belum mengatur paket aktif untuk produk ini.</div>';
+    document.getElementById('lh-totals').style.display = 'none';
+    document.getElementById('lh-revenue-box').style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = lhState.currentLines.map((l, i) => `
+    <div class="lh-pkg-row">
+      <div class="lh-pkg-info">
+        <strong>${l.name}</strong>
+        <small>${l.units} ${unitLabel} · ${lhMoney(l.price)} / paket${l.kind === 'reseller' ? ' · Reseller' : ''}</small>
+        ${l.canceled > 0 ? '<small style="color:#dc2626">Dibatalkan admin: ' + l.canceled + ' order</small>' : ''}
+      </div>
+      <div class="lh-pkg-input">
+        <label style="font-size:11px;color:var(--muted)">Jumlah order</label>
+        <input type="number" class="f-input lh-pkg-order" data-idx="${i}" min="${l.canceled || 0}" step="1" value="${l.orders}" oninput="onLHOrderChange()">
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('lh-totals').style.display = 'block';
+  document.getElementById('lh-revenue-box').style.display = 'block';
+  onLHOrderChange();
+}
+
+function onLHOrderChange() {
+  document.querySelectorAll('.lh-pkg-order').forEach(input => {
+    const idx = parseInt(input.dataset.idx);
+    lhState.currentLines[idx].orders = parseInt(input.value) || 0;
+  });
+  const t = lhPackageTotals(lhState.currentLines);
+  document.getElementById('lh-t-closing').textContent = t.closing - t.invalid;
+  document.getElementById('lh-t-units').textContent = t.units - t.invalidUnits;
+  document.getElementById('lh-t-revenue').textContent = lhMoney(t.revenue);
+}
+
+function lhPackageTotals(lines) {
+  return lines.reduce((t, p) => {
+    const orders = Number(p.orders || 0), canceled = Number(p.canceled || 0);
+    t.closing += orders;
+    t.units += orders * Number(p.units);
+    t.invalid += canceled;
+    t.invalidUnits += canceled * Number(p.units);
+    t.revenue += (orders - canceled) * Number(p.price);
+    if (p.kind === 'reseller') {
+      t.resellerUnits += orders * Number(p.units);
+      t.resellerInvalidUnits += canceled * Number(p.units);
+    }
+    return t;
+  }, { closing: 0, units: 0, invalid: 0, invalidUnits: 0, revenue: 0, resellerUnits: 0, resellerInvalidUnits: 0 });
+}
+
+function switchLHTab(tab) {
+  document.getElementById('lh-tab-orders').classList.toggle('active', tab === 'orders');
+  document.getElementById('lh-tab-bef').classList.toggle('active', tab === 'bef');
+  document.getElementById('lh-panel-orders').style.display = tab === 'orders' ? '' : 'none';
+  document.getElementById('lh-panel-bef').style.display = tab === 'bef' ? '' : 'none';
+}
+
+function lhGetBEFCounts() {
+  const counts = {};
+  document.querySelectorAll('.lh-bef').forEach(input => {
+    counts[input.dataset.key] = parseInt(input.value) || 0;
+  });
+  return counts;
+}
+
+function lhUpdateBEFTotals() {
+  const counts = lhGetBEFCounts();
+  const total = LH_LEAD_KEYS.reduce((s, k) => s + (counts[k] || 0), 0);
+  const leads = parseInt(document.getElementById('lh-leads-input').value) || 0;
+  document.getElementById('lh-bef-total').textContent = total;
+  document.getElementById('lh-bef-remaining').textContent = Math.max(0, leads - total);
+}
+
+// Attach BEF input listeners
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.lh-bef').forEach(input => {
+    input.addEventListener('input', lhUpdateBEFTotals);
+  });
+  const leadsInput = document.getElementById('lh-leads-input');
+  if (leadsInput) leadsInput.addEventListener('input', lhUpdateBEFTotals);
+});
+
+async function submitLaporan() {
+  lhShowError('');
+  const btn = document.getElementById('lh-submit');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menyimpan...';
+
+  try {
+    const date = document.getElementById('lh-date').value;
+    const aIdx = document.getElementById('lh-assignment').value;
+    if (!aIdx && aIdx !== 0) throw new Error('Pilih penugasan terlebih dahulu.');
+    const a = lhState.assignments[aIdx];
+    if (!a) throw new Error('Penugasan tidak valid.');
+    if (!date) throw new Error('Pilih tanggal laporan.');
+
+    const leads = parseInt(document.getElementById('lh-leads-input').value);
+    if (!Number.isInteger(leads) || leads < 0) throw new Error('Jumlah leads harus bilangan bulat nol atau lebih.');
+
+    // Validate packages
+    if (!lhState.currentLines.length) throw new Error('Admin belum mengatur paket aktif untuk produk ini.');
+    for (const l of lhState.currentLines) {
+      const orders = Number(l.orders);
+      if (!Number.isInteger(orders) || orders < 0) throw new Error('Jumlah order harus bilangan bulat nol atau lebih.');
+      if (orders < (l.canceled || 0)) throw new Error('Order ' + l.name + ' tidak boleh kurang dari pembatalan admin (' + l.canceled + ').');
+    }
+
+    // Validate BEF
+    const counts = lhGetBEFCounts();
+    let befTotal = 0;
+    for (const k of LH_LEAD_KEYS) {
+      const v = counts[k] || 0;
+      if (!Number.isInteger(v) || v < 0) throw new Error('Kategori BEF harus bilangan bulat nol atau lebih.');
+      befTotal += v;
+    }
+    if (befTotal > leads) throw new Error('Total kategori BEF melebihi jumlah leads.');
+
+    const packageLines = lhState.currentLines.map(l => ({
+      id: l.id, name: l.name, units: l.units, price: l.price,
+      kind: l.kind, orders: Number(l.orders), canceled: l.canceled || 0
+    }));
+
+    const reportId = lhState.editingId || crypto.randomUUID();
+    const report = {
+      id: reportId,
+      date,
+      cs: lhState.csName,
+      product: a.product,
+      advertiser: a.advertiser,
+      channel: a.channel,
+      leads,
+      notes: document.getElementById('lh-notes').value || '',
+      packageLines,
+      originalPackageLines: packageLines.map(l => ({ ...l })),
+      originalLeads: leads
+    };
+
+    const notes = document.getElementById('lh-bef-notes').value || '';
+
+    await lhFetch('save-report', {}, 'POST', { report, counts, notes });
+
+    showToast('✅ Laporan harian berhasil disimpan!', 'success');
+    lhState.editingId = null;
+    lhResetForm();
+    await loadLaporanHarian();
+
+  } catch (err) {
+    lhShowError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Simpan Laporan Harian';
+  }
+}
+
+function lhResetForm() {
+  document.getElementById('lh-date').value = lhTodayWIB();
+  document.getElementById('lh-assignment').value = '';
+  document.getElementById('lh-leads-input').value = 0;
+  document.getElementById('lh-notes').value = '';
+  document.getElementById('lh-bef-notes').value = '';
+  document.querySelectorAll('.lh-bef').forEach(i => i.value = 0);
+  lhState.currentLines = [];
+  lhState.editingId = null;
+  document.getElementById('lh-packages').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pilih penugasan terlebih dahulu.</div>';
+  document.getElementById('lh-info-box').style.display = 'none';
+  document.getElementById('lh-totals').style.display = 'none';
+  document.getElementById('lh-revenue-box').style.display = 'none';
+  lhUpdateBEFTotals();
+  switchLHTab('orders');
+}
+
+function renderLHSummary() {
+  let leads = 0, closing = 0, units = 0, revenue = 0;
+  for (const r of lhState.reports) {
+    leads += Number(r.leads || 0);
+    closing += Number(r.closing || 0) - Number(r.invalid || 0);
+    units += Number(r.units || 0) - Number(r.invalidUnits || 0);
+    revenue += Number(r.revenue || 0);
+  }
+  document.getElementById('lh-leads').textContent = leads;
+  document.getElementById('lh-closing').textContent = closing;
+  document.getElementById('lh-units').textContent = units;
+  document.getElementById('lh-revenue').textContent = lhMoney(revenue);
+  document.getElementById('lh-cr').textContent = leads ? (closing / leads * 100).toFixed(1) + '%' : '0%';
+}
+
+function renderLHChart() {
+  const canvas = document.getElementById('lh-chart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 180 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = 180;
+  ctx.clearRect(0, 0, W, H);
+
+  // Group reports by date
+  const byDate = {};
+  for (const r of lhState.reports) {
+    if (!byDate[r.date]) byDate[r.date] = { leads: 0, closing: 0, revenue: 0 };
+    byDate[r.date].leads += Number(r.leads || 0);
+    byDate[r.date].closing += Number(r.closing || 0) - Number(r.invalid || 0);
+    byDate[r.date].revenue += Number(r.revenue || 0);
+  }
+  const dates = Object.keys(byDate).sort();
+  if (!dates.length) {
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
+    ctx.font = '12px Plus Jakarta Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Belum ada data untuk ditampilkan', W / 2, H / 2);
+    return;
+  }
+
+  const maxClosing = Math.max(...dates.map(d => byDate[d].closing), 1);
+  const barW = Math.min(32, (W - 60) / dates.length - 8);
+  const padL = 40, padB = 30, chartH = H - padB - 10;
+
+  // Y axis
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
+  ctx.font = '10px Plus Jakarta Sans, sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const y = 10 + chartH - (chartH / 4) * i;
+    ctx.fillText(Math.round(maxClosing / 4 * i), padL - 6, y + 3);
+    ctx.beginPath();
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim() || '#e5e7eb';
+    ctx.lineWidth = 0.5;
+    ctx.moveTo(padL, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // Bars
+  const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
+  ctx.textAlign = 'center';
+  dates.forEach((d, i) => {
+    const x = padL + 10 + i * ((W - padL - 10) / dates.length) + ((W - padL - 10) / dates.length - barW) / 2;
+    const val = byDate[d].closing;
+    const h = (val / maxClosing) * chartH;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    const r = Math.min(4, barW / 2);
+    ctx.moveTo(x, 10 + chartH);
+    ctx.lineTo(x, 10 + chartH - h + r);
+    ctx.quadraticCurveTo(x, 10 + chartH - h, x + r, 10 + chartH - h);
+    ctx.lineTo(x + barW - r, 10 + chartH - h);
+    ctx.quadraticCurveTo(x + barW, 10 + chartH - h, x + barW, 10 + chartH - h + r);
+    ctx.lineTo(x + barW, 10 + chartH);
+    ctx.fill();
+
+    // Value on top
+    ctx.fillStyle = accent;
+    ctx.font = 'bold 10px Plus Jakarta Sans, sans-serif';
+    ctx.fillText(val, x + barW / 2, 10 + chartH - h - 4);
+
+    // Date label
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6b7280';
+    ctx.font = '9px Plus Jakarta Sans, sans-serif';
+    const label = d.split('-').slice(1).reverse().join('/');
+    ctx.fillText(label, x + barW / 2, H - 8);
+  });
+}
+
+function renderLHHistory() {
+  const tbody = document.getElementById('lh-history-body');
+  if (!lhState.reports.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;font-size:13px">Belum ada laporan di rentang ini.</td></tr>';
+    return;
+  }
+
+  const lrMap = new Map(lhState.leadReports.map(l => [l.reportId, l]));
+
+  tbody.innerHTML = lhState.reports.map(r => {
+    const net = Number(r.closing || 0) - Number(r.invalid || 0);
+    const netUnits = Number(r.units || 0) - Number(r.invalidUnits || 0);
+    const lr = lrMap.get(r.id);
+    const befStatus = lr ? '✅ Terisi' : '⬜ Belum';
+    const dateLabel = r.date.split('-').reverse().join('/');
+    return '<tr>' +
+      '<td><strong>' + dateLabel + '</strong></td>' +
+      '<td>' + r.product + '</td>' +
+      '<td>' + r.advertiser + '</td>' +
+      '<td>' + r.channel + '</td>' +
+      '<td>' + r.leads + '</td>' +
+      '<td>' + net + '</td>' +
+      '<td>' + netUnits + '</td>' +
+      '<td style="font-family:var(--mono)">' + lhMoney(r.revenue) + '</td>' +
+      '<td>' + befStatus + '</td>' +
+      '<td><button class="btn-text" onclick="editLHReport(\'' + r.id + '\')">Edit</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function editLHReport(id) {
+  const report = lhState.reports.find(r => r.id === id);
+  if (!report) return;
+
+  lhState.editingId = id;
+
+  // Set form values
+  document.getElementById('lh-date').value = report.date;
+  document.getElementById('lh-leads-input').value = report.leads;
+  document.getElementById('lh-notes').value = report.notes || '';
+
+  // Find matching assignment
+  const aIdx = lhState.assignments.findIndex(a =>
+    a.product === report.product && a.advertiser === report.advertiser && a.channel === report.channel
+  );
+  if (aIdx >= 0) {
+    document.getElementById('lh-assignment').value = aIdx;
+    onLHAssignmentChange();
+  }
+
+  // Fill BEF
+  const lr = lhState.leadReports.find(l => l.reportId === id);
+  if (lr && lr.counts) {
+    document.querySelectorAll('.lh-bef').forEach(input => {
+      input.value = lr.counts[input.dataset.key] || 0;
+    });
+    document.getElementById('lh-bef-notes').value = lr.notes || '';
+  }
+  lhUpdateBEFTotals();
+
+  // Scroll to form
+  document.getElementById('lh-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('📝 Mode edit: ' + report.date + ' ' + report.product, 'info');
 }
