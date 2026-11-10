@@ -3664,7 +3664,7 @@ function renderLHAssignments() {
   lhState.assignments.forEach((a, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = `${a.product} · ${a.advertiser} · ${a.channel}`;
+    opt.textContent = `${a.product} · ${a.advertiser} · ${a.channel} · ${a.platform || 'Meta'}`;
     sel.appendChild(opt);
   });
 }
@@ -3841,10 +3841,11 @@ async function submitLaporan() {
     const report = {
       id: reportId,
       date,
-      cs: lhState.csName,
+      cs: a.cs,
       product: a.product,
       advertiser: a.advertiser,
       channel: a.channel,
+      platform: a.platform || 'Meta',
       leads,
       notes: document.getElementById('lh-notes').value || '',
       packageLines,
