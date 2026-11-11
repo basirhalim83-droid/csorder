@@ -4029,7 +4029,7 @@ function renderLHHistory() {
       ? '<span class="lh-badge lh-badge-ctwa">CTWA</span>'
       : '<span class="lh-badge lh-badge-web">Web</span>';
     return '<tr>' +
-      '<td><button class="lh-text-btn" onclick="editLHReport(\'' + r.id + '\')">✏️ Edit</button></td>' +
+      '<td><button class="lh-text-btn" onclick="editLHReport(\'' + r.id + '\')">✏️ Edit</button> <button class="lh-text-btn" style="color:#a35343" onclick="deleteLHReport(\'' + r.id + '\')">🗑️ Hapus</button></td>' +
       '<td><strong>' + dateLabel + '</strong></td>' +
       '<td><strong>' + r.product + '</strong><span class="lh-cell-sub">' + r.advertiser + '</span></td>' +
       '<td>' + chBadge + '</td>' +
@@ -4039,6 +4039,21 @@ function renderLHHistory() {
       '<td class="lh-money">' + lhMoney(r.revenue) + '</td>' +
     '</tr>';
   }).join('');
+}
+
+async function deleteLHReport(id) {
+  const report = lhState.reports.find(r => r.id === id);
+  if (!report) return;
+  if (!confirm('Hapus laporan ' + report.date + ' ' + report.product + ' ' + report.advertiser + '?\nData yang dihapus tidak bisa dikembalikan.')) return;
+  try {
+    await lhFetch('delete-report', {}, 'POST', { reportId: id });
+    lhState.reports = lhState.reports.filter(r => r.id !== id);
+    lhState.leadReports = lhState.leadReports.filter(l => l.reportId !== id);
+    renderLHHistory();
+    showNotification('Laporan berhasil dihapus.', 'success');
+  } catch (e) {
+    showNotification('Gagal menghapus: ' + e.message, 'error');
+  }
 }
 
 function editLHReport(id) {
